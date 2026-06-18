@@ -1,0 +1,1346 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>온투 SDK 외부채널 통계 입력기 - 외부 DB</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg:#f6f7fb; --card:#fff; --line:#d9dee8; --text:#111827; --muted:#64748b;
+      --head:#eef2f7; --sum:#fff7ed; --df:#eef6ff; --sdk:#f0fdf4; --accent:#2563eb;
+      --danger:#dc2626; --warn:#d97706; --ok:#059669;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0; background:var(--bg); color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif;
+      font-size:14px;
+    }
+    header { padding:20px 26px 8px; }
+    h1 { margin:0 0 7px; font-size:23px; }
+    .desc { color:var(--muted); line-height:1.5; }
+    main { padding:10px 26px 34px; display:grid; gap:14px; }
+    .card {
+      background:var(--card); border:1px solid var(--line); border-radius:14px;
+      padding:15px; box-shadow:0 1px 2px rgba(15,23,42,.04);
+    }
+    .grid { display:grid; grid-template-columns:repeat(12, 1fr); gap:12px; }
+    .span4 { grid-column:span 4; }
+    .span6 { grid-column:span 6; }
+    .span8 { grid-column:span 8; }
+    .span12 { grid-column:span 12; }
+    label { display:block; font-weight:800; margin-bottom:6px; font-size:13px; }
+    input, select, button, textarea {
+      font:inherit; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--text);
+    }
+    input, select { width:100%; padding:8px 9px; height:38px; }
+    textarea { width:100%; min-height:86px; padding:10px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
+    button { padding:9px 12px; font-weight:800; cursor:pointer; height:38px; }
+    button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+    button.ghost { background:#fff; }
+    button.danger { color:var(--danger); border-color:#fecaca; background:#fff; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .hint { color:var(--muted); font-size:12px; line-height:1.45; margin-top:6px; }
+    .section-title { font-weight:900; font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+    .badge { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; border:1px solid var(--line); font-size:12px; font-weight:800; background:#fff; }
+    .badge.warn { color:var(--warn); border-color:#fed7aa; background:#fff7ed; }
+    .badge.ok { color:var(--ok); border-color:#bbf7d0; background:#f0fdf4; }
+    .badge.danger { color:var(--danger); border-color:#fecaca; background:#fef2f2; }
+    .badge.gray { color:#475569; border-color:#cbd5e1; background:#f8fafc; }
+    .table-wrap {
+      overflow:auto; border:1px solid var(--line); border-radius:12px; background:#fff;
+      max-height:640px;
+    }
+    table { border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
+    th, td { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 8px; white-space:nowrap; text-align:right; }
+    th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:last-child, td:last-child { text-align:left; }
+    th { position:sticky; top:0; z-index:2; background:var(--head); font-weight:900; }
+    td.na { color:#9ca3af; background:#fafafa; }
+    tr.sum td { background:var(--sum); font-weight:900; }
+    tr.dfinery td { background:var(--df); color:#1e3a8a; }
+    tr.sdk td:first-child, tr.sdk td:nth-child(2) { background:var(--sdk); }
+    tr:hover td { filter:brightness(.985); }
+    .kpis { display:grid; grid-template-columns:repeat(8, minmax(110px, 1fr)); gap:9px; }
+    .kpi { border:1px solid var(--line); border-radius:12px; padding:10px; background:#fbfdff; }
+    .kpi .name { color:var(--muted); font-size:12px; margin-bottom:4px; }
+    .kpi .value { font-weight:900; font-size:19px; }
+    .kpi .sub { color:var(--muted); font-size:11px; margin-top:3px; }
+    .mini { font-size:12px; color:var(--muted); }
+    .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+    .tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .tab { border-radius:999px; padding:8px 12px; background:#fff; border:1px solid var(--line); }
+    .tab.active { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
+    .hidden { display:none; }
+    .compact-input {
+      display:grid;
+      grid-template-columns: 155px repeat(5, minmax(86px, 1fr)) minmax(160px, 1.3fr);
+      gap:8px;
+      align-items:end;
+      margin-bottom:8px;
+    }
+    .compact-input .channel {
+      font-weight:900;
+      padding:9px 10px;
+      border:1px solid var(--line);
+      border-radius:9px;
+      background:#f8fafc;
+      min-height:38px;
+    }
+    .compact-head {
+      display:grid;
+      grid-template-columns: 155px repeat(5, minmax(86px, 1fr)) minmax(160px, 1.3fr);
+      gap:8px;
+      margin-bottom:4px;
+      color:#475569;
+      font-weight:900;
+      font-size:12px;
+    }
+    .compact-head div { padding:0 2px; }
+    .panel-title {
+      font-weight:900;
+      font-size:13px;
+      color:#334155;
+      margin:8px 0 8px;
+      padding-top:8px;
+      border-top:1px dashed var(--line);
+    }
+    .panel-title:first-child { border-top:0; padding-top:0; margin-top:0; }
+    .right-actions { align-self:start; }
+    .db-status { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    @media (max-width:1200px) {
+      .span4,.span6,.span8 { grid-column:span 12; }
+      .kpis { grid-template-columns:repeat(2, 1fr); }
+      .compact-input, .compact-head { grid-template-columns: 1fr 1fr; }
+      .compact-head { display:none; }
+    }
+    body.auth-locked header,
+    body.auth-locked main { display:none; }
+    .auth-screen {
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:#f6f7fb; padding:24px; z-index:9999;
+    }
+    body.auth-locked .auth-screen { display:flex; }
+    .auth-panel {
+      width:min(380px, 100%); background:#fff; border:1px solid var(--line);
+      border-radius:14px; padding:22px; box-shadow:0 10px 30px rgba(15,23,42,.12);
+    }
+    .auth-panel h2 { margin:0 0 14px; font-size:20px; }
+    .auth-panel .auth-fields { display:grid; gap:10px; }
+    .auth-error { min-height:18px; color:var(--danger); font-size:12px; margin-top:8px; }
+  </style>
+</head>
+<body class="auth-locked">
+<div class="auth-screen">
+  <form class="auth-panel" id="authForm">
+    <h2>온투 SDK 통계</h2>
+    <div class="auth-fields">
+      <label>아이디<input id="authId" autocomplete="username"></label>
+      <label>비밀번호<input id="authPw" type="password" autocomplete="current-password"></label>
+      <button class="primary" type="submit">접속</button>
+    </div>
+    <div id="authError" class="auth-error"></div>
+  </form>
+</div>
+<header>
+  <h1>온투 SDK 외부채널 통계 입력기</h1>
+  
+</header>
+
+<main>
+  <input id="dbOpenFallbackFile" type="file" accept=".json,application/json" style="display:none" onchange="openDbFileFallback(event)">
+<section class="grid">
+    <div class="card span8">
+      <div class="toolbar">
+        <div>
+          <div class="section-title">간편 입력</div>
+        </div>
+        <div class="row">
+          <label style="margin:0;">기준일</label>
+          <input id="dt" type="date" style="width:155px;">
+        </div>
+      </div>
+
+      <div style="height:12px;"></div>
+
+      <div class="panel-title">GA4 / 제휴 채널 입력</div>
+      <div class="compact-head">
+        <div>채널</div><div>배너 클릭</div><div>랜딩 옵션</div><div>배너 랜딩</div><div>딥링크 앱실행</div><div>신규회원/투자</div>
+      </div>
+
+      <div class="compact-input">
+        <div class="channel">하나원큐(WEB)</div>
+        <input id="oneq_click" type="number" placeholder="클릭" oninput="syncLanding('oneq')">
+        <select id="oneq_landing_mode" onchange="toggleLandingMode('oneq')">
+          <option value="same" selected>클릭과 동일</option>
+          <option value="manual">직접입력</option>
+        </select>
+        <input id="oneq_landing" type="number" placeholder="랜딩" disabled>
+        <input id="oneq_open" type="number" placeholder="직접입력 선택">
+        <input id="oneq_signup" type="number" placeholder="직접입력 선택">
+        <input id="oneq_memo" placeholder="원큐 비고">
+      </div>
+
+      <div class="compact-input">
+        <div class="channel">하나머니(WEB)</div>
+        <input id="money_click" type="number" placeholder="클릭" oninput="syncLanding('money')">
+        <select id="money_landing_mode" onchange="toggleLandingMode('money')">
+          <option value="same" selected>클릭과 동일</option>
+          <option value="manual">직접입력</option>
+        </select>
+        <input id="money_landing" type="number" placeholder="랜딩" disabled>
+        <input id="money_open" type="number" placeholder="직접입력 선택">
+        <input id="money_signup" type="number" placeholder="직접입력 선택">
+        <input id="money_memo" placeholder="머니 비고">
+      </div>
+
+      <div class="compact-input" id="paywebInputRow">
+        <div class="channel">하나페이(WEB)</div>
+        <input id="payweb_click" type="number" placeholder="클릭" oninput="syncLanding('payweb')">
+        <select id="payweb_landing_mode" onchange="toggleLandingMode('payweb')">
+          <option value="same" selected>클릭과 동일</option>
+          <option value="manual">직접입력</option>
+        </select>
+        <input id="payweb_landing" type="number" placeholder="랜딩" disabled>
+        <input id="payweb_open" type="number" placeholder="직접입력 선택">
+        <input id="payweb_signup" type="number" placeholder="직접입력 선택">
+        <input id="payweb_memo" placeholder="페이WEB 비고">
+      </div>
+
+      <div class="compact-input">
+        <div class="channel">하나페이(SDK)</div>
+        <input id="paysdk_click" type="number" placeholder="클릭">
+        <select disabled><option>N/A</option></select>
+        <input value="N/A" disabled>
+        <input id="paysdk_open" type="number" placeholder="SDK 실행">
+        <input id="paysdk_signup" type="number" placeholder="신규회원">
+        <input id="paysdk_invest" type="number" placeholder="투자" style="grid-column:auto;">
+        <input id="paysdk_memo" placeholder="페이SDK 비고">
+      </div>
+
+      <div class="panel-title">Dfinery 총량 입력</div>
+      <div class="compact-head">
+        <div>원천</div><div>딥링크 클릭</div><div>앱설치</div><div>딥링크 앱실행</div><div>신규회원</div><div></div><div></div>
+      </div>
+      <div class="compact-input">
+        <div class="channel">Dfinery</div>
+        <input id="df_deeplink" type="number" placeholder="딥링크">
+        <input id="df_install" type="number" placeholder="설치">
+        <input id="df_open" type="number" placeholder="앱실행">
+        <input id="df_signup" type="number" placeholder="신규회원">
+        <input disabled>
+        <input disabled>
+      </div>
+
+      <div class="panel-title">추가 옵션</div>
+      <div class="grid">
+        <div class="span4">
+          <label>배분 기준</label>
+          <select id="allocationBasis">
+            <option value="landing">WEB값: 배너랜딩 비중 배분</option>
+            <option value="click">WEB값: 배너클릭 비중 배분</option>
+            <option value="none">Dfinery 배분 안 함</option>
+          </select>
+        </div>
+        <div class="span8">
+          <label>일자 공통 비고</label>
+          <input id="memo" placeholder="전체 공통 메모">
+        </div>
+      </div>
+    </div>
+
+    <div class="card span4 right-actions">
+      <div class="section-title">작업 <span id="dbBadgeMini" class="badge danger" onclick="openDbFile()" title="DB 파일 열기" style="cursor:pointer;">DB 미연결</span></div>
+      <div class="row">
+        <button class="primary" onclick="saveDay()">보고 행 저장/갱신</button>
+        <button class="ghost" onclick="loadDayToForm()">선택일 불러오기</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button class="ghost" onclick="downloadReportCSV()">CSV 다운로드</button>
+        <button class="ghost" onclick="copyReportTSV()">표 복사</button>
+        <button class="ghost" onclick="copyD5Image()">D-5 이미지 복사</button>
+      </div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button class="ghost" onclick="applyRecentPreset()">샘플 입력</button>
+        <button class="ghost" onclick="clearForm()">입력칸 비우기</button>
+        <button class="danger" onclick="deleteDay()">선택일 삭제</button>
+      </div>
+      <div style="height:14px"></div>
+      <label>표시 범위</label>
+      <select id="viewFilter" onchange="renderAll()">
+        <option value="all">전체</option>
+        <option value="30">최근 30일</option>
+        <option value="7">최근 7일</option>
+        <option value="selected">선택일만</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <div>
+        <div class="section-title">상단 요약 <span id="summaryBadge" class="badge warn">배분값 포함 가능</span></div>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <div>
+        <div class="section-title">보고용 누적 테이블 <span class="badge ok">일자 역순</span></div>
+      </div>
+    </div>
+    <div style="height:12px"></div>
+    <div class="table-wrap">
+      <table id="reportTable"></table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('migration', this)">마이그레이션</button>
+      <button class="tab" onclick="showTab('backup', this)">DB/백업</button>
+    </div>
+    <div id="tab-migration">
+      <div class="grid">
+        <div class="span8">
+          <label>Excel VBA에서 추출한 마이그레이션 JSON 붙여넣기</label>
+          <textarea id="migrationText" placeholder="VBA가 생성한 onto_sdk_migration_input.json 내용을 붙여넣거나 JSON 파일 가져오기를 사용하세요."></textarea>
+        </div>
+        <div class="span4">
+          <label>마이그레이션 작업</label>
+          <div class="row">
+            <button class="primary" onclick="importMigrationText()">붙여넣은 JSON 반영</button>
+            <input id="migrationFile" type="file" accept=".json,application/json" style="display:none" onchange="importMigrationFile(event)">
+            <button class="ghost" onclick="document.getElementById('migrationFile').click()">마이그레이션 JSON 가져오기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="tab-backup" class="hidden">
+      <div class="grid">
+        <div class="span12">
+          <div class="section-title">DB 파일</div>
+          <div class="db-status">
+            <span id="dbBadge" class="badge danger">DB 미연결</span>
+            <span id="dbName" class="mini">브라우저 메모리만 사용 중</span>
+          </div>
+          <div style="height:10px"></div>
+          <div class="row">
+            <button class="primary" onclick="openDbFile()">DB 열기</button>
+            <button class="ghost" onclick="saveDbFile()">DB 저장</button>
+            <button class="ghost" onclick="saveDbFileAs()">다른 이름으로 DB 저장</button>
+            <button class="ghost" onclick="downloadDb()">DB 다운로드</button>
+            <input id="dbImportFile" type="file" accept=".json,application/json" style="display:none" onchange="importDbFileFallback(event)">
+            <button class="ghost" onclick="document.getElementById('dbImportFile').click()">JSON 가져오기</button>
+            <button class="primary" onclick="loadSupabaseDb()">Supabase 불러오기</button>
+            <button class="ghost" onclick="saveSupabaseDb()">Supabase 저장</button>
+            <button class="ghost" onclick="uploadCurrentDbToSupabase()">현재 DB 업로드</button>
+          </div>
+        </div>
+        <div class="span6">
+          <label>DB JSON</label>
+          <textarea id="backupText" placeholder="백업 내보내기를 누르면 현재 DB JSON이 생성됩니다."></textarea>
+        </div>
+        <div class="span6">
+          <label>작업</label>
+          <div class="row">
+            <button class="ghost" onclick="exportBackup()">백업 내보내기</button>
+            <button class="primary" onclick="importBackup()">백업 복원</button>
+            <button class="danger" onclick="clearAll()">전체 초기화</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const AUTH_HASH = "2a01395cc6e9e79dc0641e1f5acb42f21e1d6eff68f26310941ac4b35f798e27";
+async function sha256Hex(text){
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function unlockApp(){
+  document.body.classList.remove("auth-locked");
+  window.ontoSdkUnlocked = true;
+  if(window.ontoSdkBootstrapped && typeof initSupabaseAutoLoad === "function"){
+    initSupabaseAutoLoad();
+  }
+}
+if(sessionStorage.getItem("onto_sdk_auth") === "ok") unlockApp();
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("authForm");
+  if(!form) return;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const id = document.getElementById("authId").value.trim();
+    const pw = document.getElementById("authPw").value;
+    const hash = await sha256Hex(`${id}:${pw}`);
+    if(hash === AUTH_HASH){
+      sessionStorage.setItem("onto_sdk_auth", "ok");
+      unlockApp();
+    }else{
+      document.getElementById("authError").textContent = "아이디 또는 비밀번호가 맞지 않습니다.";
+    }
+  });
+});
+const DB_VERSION = 1;
+const PAY_WEB_CUTOFF = "2026-06-01";
+const SUPABASE_URL = "https://nvoghabpicratihuwgwa.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_qZRpXByzsMBw4O1HZmyAgw_Tk47StV0";
+const SUPABASE_TABLE = "onto_sdk_databases";
+const SUPABASE_DB_ID = "default";
+const CHANNEL_ORDER_BEFORE_CUTOFF = ["하나원큐(WEB)", "하나머니(WEB)", "하나페이(WEB)", "하나페이(SDK)"];
+const CHANNEL_ORDER_AFTER_CUTOFF = ["하나원큐(WEB)", "하나머니(WEB)", "하나페이(SDK)"];
+let db = emptyDb();
+let dbHandle = null;
+let dbFileName = "";
+let dbBackend = "memory";
+let supabaseClient = null;
+
+function emptyDb(){
+  return {
+    schema: "onto_sdk_external_channel_report_db",
+    version: DB_VERSION,
+    updated_at: new Date().toISOString(),
+    days: {}
+  };
+}
+function normalizeDb(obj){
+  if(!obj || typeof obj !== "object") return emptyDb();
+  if(obj.schema === "onto_sdk_external_channel_report_db") {
+    obj.days ||= {};
+    obj.version ||= DB_VERSION;
+    return obj;
+  }
+  // 과거 버전 호환: 날짜 객체만 들어있는 경우
+  if(!obj.days) {
+    return {schema:"onto_sdk_external_channel_report_db", version:DB_VERSION, updated_at:new Date().toISOString(), days:obj};
+  }
+  return obj;
+}
+function setDbStatus(connected, msg){
+  const badge = document.getElementById("dbBadge");
+  const mini = document.getElementById("dbBadgeMini");
+  const name = document.getElementById("dbName");
+  if(badge){
+    badge.className = connected ? "badge ok" : "badge danger";
+    badge.textContent = connected ? "DB 연결됨" : "DB 미연결";
+  }
+  if(mini){
+    mini.className = connected ? "badge ok" : "badge danger";
+    mini.textContent = connected ? "DB 연결됨" : "DB 미연결";
+    mini.onclick = openDbFile;
+    mini.title = connected ? "DB 파일 다시 열기" : "DB 파일 열기";
+    mini.style.cursor = "pointer";
+  }
+  if(name) name.textContent = msg || (connected ? dbFileName : "브라우저 메모리만 사용 중");
+}
+function isSupabaseConfigured(){
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
+}
+function getSupabaseClient(){
+  if(!isSupabaseConfigured()) return null;
+  if(!supabaseClient){
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+  return supabaseClient;
+}
+async function loadSupabaseDb(showAlert = true){
+  const client = getSupabaseClient();
+  if(!client){
+    if(showAlert) alert("Supabase 설정 또는 클라이언트 로드가 필요합니다.");
+    return false;
+  }
+  try{
+    const { data, error } = await client
+      .from(SUPABASE_TABLE)
+      .select("data,updated_at")
+      .eq("id", SUPABASE_DB_ID)
+      .maybeSingle();
+    if(error) throw error;
+    if(!data || !data.data){
+      db = emptyDb();
+      await saveSupabaseDb(false);
+    }else{
+      db = normalizeDb(data.data);
+    }
+    dbHandle = null;
+    dbFileName = `Supabase:${SUPABASE_TABLE}/${SUPABASE_DB_ID}`;
+    dbBackend = "supabase";
+    setDbStatus(true, dbFileName);
+    syncSelectedDayForm();
+    renderAll();
+    if(showAlert) alert("Supabase DB를 불러왔습니다.");
+    return true;
+  }catch(e){
+    setDbStatus(false, "Supabase 연결 실패");
+    if(showAlert) alert("Supabase DB 불러오기 실패: " + (e.message || JSON.stringify(e)));
+    return false;
+  }
+}
+async function saveSupabaseDb(showAlert = true){
+  const client = getSupabaseClient();
+  if(!client){
+    if(showAlert) alert("Supabase 설정 또는 클라이언트 로드가 필요합니다.");
+    return false;
+  }
+  try{
+    db.updated_at = new Date().toISOString();
+    const { error } = await client
+      .from(SUPABASE_TABLE)
+      .upsert({
+        id: SUPABASE_DB_ID,
+        data: db,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "id" });
+    if(error) throw error;
+    dbHandle = null;
+    dbFileName = `Supabase:${SUPABASE_TABLE}/${SUPABASE_DB_ID}`;
+    dbBackend = "supabase";
+    setDbStatus(true, dbFileName);
+    if(showAlert) alert("Supabase DB에 저장했습니다.");
+    return true;
+  }catch(e){
+    alert("Supabase DB 저장 실패: " + (e.message || JSON.stringify(e)));
+    return false;
+  }
+}
+async function uploadCurrentDbToSupabase(){
+  const ok = await saveSupabaseDb(false);
+  if(ok) alert("현재 화면의 DB를 Supabase로 업로드했습니다.");
+}
+async function initSupabaseAutoLoad(){
+  if(!isSupabaseConfigured()){
+    setDbStatus(false, "Supabase 설정 없음 · 로컬 모드");
+    return;
+  }
+  await loadSupabaseDb(false);
+}
+function syncSelectedDayForm(){
+  const dt = document.getElementById("dt").value;
+  if(db.days && db.days[dt]){
+    loadDayToForm(false);
+  }else{
+    clearForm();
+  }
+  updatePayWebVisibility();
+}
+async function openDbFile(){
+  if(!window.showOpenFilePicker){
+    const fallback = document.getElementById("dbOpenFallbackFile") || document.getElementById("dbImportFile");
+    if(fallback){
+      fallback.click();
+      return;
+    }
+    alert("파일 선택 입력을 찾지 못했습니다.");
+    return;
+  }
+  try{
+    const [handle] = await window.showOpenFilePicker({
+      types: [{description:"JSON DB", accept: {"application/json":[".json"]}}],
+      multiple: false
+    });
+    const file = await handle.getFile();
+    const text = await file.text();
+    db = normalizeDb(JSON.parse(text || "{}"));
+    dbHandle = handle;
+    dbFileName = file.name;
+    dbBackend = "file";
+    setDbStatus(true, file.name);
+    syncSelectedDayForm();
+    renderAll();
+  }catch(e){
+    if(e.name !== "AbortError") alert("DB 파일을 열지 못했습니다: " + e.message);
+  }
+}
+async function openDbFileFallback(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    db = normalizeDb(JSON.parse(text || "{}"));
+    dbHandle = null;
+    dbFileName = file.name;
+    dbBackend = "memory";
+    setDbStatus(false, `${file.name} 불러옴 · 직접 저장 연결은 아님`);
+    syncSelectedDayForm();
+    renderAll();
+  }catch(e){
+    alert("DB 파일을 열지 못했습니다: " + e.message);
+  }finally{
+    event.target.value = "";
+  }
+}
+
+async function saveDbFile(){
+  db.updated_at = new Date().toISOString();
+  if(dbBackend === "supabase"){
+    await saveSupabaseDb();
+    return;
+  }
+  if(dbHandle && window.showSaveFilePicker){
+    try{
+      const writable = await dbHandle.createWritable();
+      await writable.write(JSON.stringify(db, null, 2));
+      await writable.close();
+      setDbStatus(true, dbFileName || "연결된 DB 파일");
+      return;
+    }catch(e){
+      alert("DB 저장 실패: " + e.message);
+      return;
+    }
+  }
+  downloadDb();
+}
+async function saveDbFileAs(){
+  db.updated_at = new Date().toISOString();
+  if(!window.showSaveFilePicker){
+    downloadDb();
+    return;
+  }
+  try{
+    const handle = await window.showSaveFilePicker({
+      suggestedName: "onto_sdk_external_channel_db.json",
+      types: [{description:"JSON DB", accept: {"application/json":[".json"]}}]
+    });
+    dbHandle = handle;
+    dbFileName = handle.name || "onto_sdk_external_channel_db.json";
+    await saveDbFile();
+  }catch(e){
+    if(e.name !== "AbortError") alert("다른 이름 저장 실패: " + e.message);
+  }
+}
+function downloadDb(){
+  db.updated_at = new Date().toISOString();
+  const blob = new Blob([JSON.stringify(db, null, 2)], {type:"application/json;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "onto_sdk_external_channel_db.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+async function importDbFileFallback(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    db = normalizeDb(JSON.parse(text || "{}"));
+    dbHandle = null;
+    dbFileName = file.name;
+    dbBackend = "memory";
+    setDbStatus(false, `${file.name} 가져옴 · 직접 저장 연결은 아님`);
+    syncSelectedDayForm();
+    renderAll();
+  }catch(e){
+    alert("JSON 가져오기 실패: " + e.message);
+  }finally{
+    event.target.value = "";
+  }
+}
+
+function kstToday(){
+  const d = new Date(Date.now()+9*60*60*1000);
+  return d.toISOString().slice(0,10);
+}
+document.getElementById("dt").value = kstToday();
+
+function isPayWebActive(dt){
+  return String(dt || "") < PAY_WEB_CUTOFF;
+}
+function channelOrderForDate(dt){
+  return isPayWebActive(dt) ? CHANNEL_ORDER_BEFORE_CUTOFF : CHANNEL_ORDER_AFTER_CUTOFF;
+}
+function webChannelsForDate(dt){
+  return isPayWebActive(dt)
+    ? ["하나원큐(WEB)", "하나머니(WEB)", "하나페이(WEB)"]
+    : ["하나원큐(WEB)", "하나머니(WEB)"];
+}
+function updatePayWebVisibility(){
+  const dt = document.getElementById("dt").value || kstToday();
+  const active = isPayWebActive(dt);
+  const row = document.getElementById("paywebInputRow");
+  if(row) row.style.display = active ? "grid" : "none";
+}
+
+function val(id){
+  const el = document.getElementById(id);
+  if(!el) return "";
+  const s = String(el.value ?? "").trim();
+  if(s === "") return "";
+  const n = Number(s.replace(/,/g,""));
+  return Number.isFinite(n) ? n : s;
+}
+function setVal(id, v){
+  const el = document.getElementById(id);
+  if(el) el.value = (v === "N/A" || v === "추적불가" || v === undefined || v === null) ? "" : v;
+}
+function toggleLandingMode(prefix){
+  const mode = document.getElementById(prefix + "_landing_mode").value;
+  const landing = document.getElementById(prefix + "_landing");
+  if(mode === "same"){
+    landing.disabled = true;
+    landing.value = document.getElementById(prefix + "_click").value || "";
+  }else{
+    landing.disabled = false;
+    if(landing.value === document.getElementById(prefix + "_click").value) landing.value = "";
+    landing.focus();
+  }
+}
+function syncLanding(prefix){
+  const mode = document.getElementById(prefix + "_landing_mode");
+  const landing = document.getElementById(prefix + "_landing");
+  if(mode && landing && mode.value === "same"){
+    landing.value = document.getElementById(prefix + "_click").value || "";
+  }
+}
+function landingValue(prefix){
+  const mode = document.getElementById(prefix + "_landing_mode");
+  if(mode && mode.value === "same") return val(prefix + "_click");
+  return val(prefix + "_landing");
+}
+function setLanding(prefix, clickVal, landingVal){
+  setVal(prefix + "_click", clickVal);
+  const same = String(clickVal ?? "") !== "" && String(clickVal ?? "") === String(landingVal ?? "");
+  const mode = document.getElementById(prefix + "_landing_mode");
+  const landing = document.getElementById(prefix + "_landing");
+  if(mode){
+    mode.value = same || landingVal === "" || landingVal === undefined || landingVal === null ? "same" : "manual";
+  }
+  if(landing){
+    landing.disabled = mode.value === "same";
+    landing.value = landingVal === undefined || landingVal === null ? "" : landingVal;
+    if(mode.value === "same") landing.value = clickVal || "";
+  }
+}
+function num(x){
+  if(x === "" || x === null || x === undefined) return 0;
+  const n = Number(String(x).replace(/,/g,""));
+  return Number.isFinite(n) ? n : 0;
+}
+function isBlank(x){ return x === "" || x === null || x === undefined; }
+function mergeKeepExistingOnBlank(existing, incoming){
+  const merged = Object.assign({}, existing || {});
+  Object.entries(incoming || {}).forEach(([key, value]) => {
+    if(!isBlank(value)) merged[key] = value;
+  });
+  return merged;
+}
+function display(x, naText=""){
+  if(x === "" || x === null || x === undefined) return naText || "";
+  if(typeof x === "number") return Math.round(x).toLocaleString("ko-KR");
+  const n = Number(String(x).replace(/,/g,""));
+  if(Number.isFinite(n)) return Math.round(n).toLocaleString("ko-KR");
+  return String(x);
+}
+function pct(a,b){
+  a = num(a); b = num(b);
+  if(!b) return "-";
+  return (a/b*100).toFixed(1)+"%";
+}
+function round(x){ return Math.round((Number(x)||0)); }
+
+function allocateByLargestRemainder(total, items){
+  total = Math.round(num(total));
+  const normalized = items.map(item => ({
+    key: item.key,
+    basis: num(item.basis),
+    raw: 0,
+    floor: 0,
+    remainder: 0
+  }));
+  const denom = normalized.reduce((s, item) => s + item.basis, 0);
+  const result = {};
+  normalized.forEach(item => result[item.key] = 0);
+  if(!denom || total <= 0) return result;
+
+  normalized.forEach(item => {
+    item.raw = total * item.basis / denom;
+    item.floor = Math.floor(item.raw);
+    item.remainder = item.raw - item.floor;
+    result[item.key] = item.floor;
+  });
+
+  let assigned = normalized.reduce((s, item) => s + item.floor, 0);
+  let remain = total - assigned;
+
+  normalized
+    .sort((a,b) => {
+      if(b.remainder !== a.remainder) return b.remainder - a.remainder;
+      if(b.basis !== a.basis) return b.basis - a.basis;
+      return a.key.localeCompare(b.key, "ko");
+    })
+    .forEach(item => {
+      if(remain > 0){
+        result[item.key] += 1;
+        remain -= 1;
+      }
+    });
+
+  return result;
+}
+
+function makeDayFromForm(){
+  const dt = document.getElementById("dt").value || kstToday();
+  const memo = val("memo");
+  const basis = document.getElementById("allocationBasis").value;
+
+  const rows = {
+    "하나원큐(WEB)": {
+      banner_click: val("oneq_click"),
+      banner_landing: landingValue("oneq"),
+      deeplink_click: "",
+      app_install: "",
+      sdk_open: val("oneq_open"),
+      signup: val("oneq_signup"),
+      invest: "추적불가",
+      memo: val("oneq_memo") || memo
+    },
+    "하나머니(WEB)": {
+      banner_click: val("money_click"),
+      banner_landing: landingValue("money"),
+      deeplink_click: "",
+      app_install: "",
+      sdk_open: val("money_open"),
+      signup: val("money_signup"),
+      invest: "추적불가",
+      memo: val("money_memo") || memo
+    },
+    "하나페이(WEB)": {
+      banner_click: val("payweb_click"),
+      banner_landing: landingValue("payweb"),
+      deeplink_click: "",
+      app_install: "",
+      sdk_open: val("payweb_open"),
+      signup: val("payweb_signup"),
+      invest: "",
+      memo: val("payweb_memo") || memo
+    },
+    "하나페이(SDK)": {
+      banner_click: val("paysdk_click"),
+      banner_landing: "N/A",
+      deeplink_click: "N/A",
+      app_install: "N/A",
+      sdk_open: val("paysdk_open"),
+      signup: val("paysdk_signup"),
+      invest: val("paysdk_invest"),
+      memo: val("paysdk_memo") || memo
+    }
+  };
+
+  if(!isPayWebActive(dt)){
+    delete rows["하나페이(WEB)"];
+  }
+
+  const df = {
+    deeplink_click: val("df_deeplink"),
+    app_install: val("df_install"),
+    sdk_open: val("df_open"),
+    signup: val("df_signup")
+  };
+
+  if(basis !== "none"){
+    const webChannels = webChannelsForDate(dt);
+    const basisMetric = basis === "landing" ? "banner_landing" : "banner_click";
+    const denom = webChannels.reduce((s,ch)=>s+num(rows[ch][basisMetric]),0);
+    ["deeplink_click","app_install","sdk_open","signup"].forEach(metric=>{
+      if(isBlank(df[metric]) || !denom) return;
+      const totalMetric = Math.round(num(df[metric]));
+      const allocated = allocateByLargestRemainder(totalMetric, webChannels.map(ch => ({
+        key: ch,
+        basis: rows[ch][basisMetric]
+      })));
+      webChannels.forEach(ch=>{
+        if(isBlank(rows[ch][metric])){
+          rows[ch][metric] = allocated[ch] || 0;
+        }
+      });
+    });
+  }
+
+  return {
+    dt,
+    basis,
+    memo,
+    rows,
+    dfinery: {
+      banner_click: "",
+      banner_landing: "",
+      deeplink_click: df.deeplink_click,
+      app_install: df.app_install,
+      sdk_open: df.sdk_open,
+      signup: df.signup,
+      invest: ""
+    },
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function saveDay(){
+  const dt = document.getElementById("dt").value || kstToday();
+  const existing = db.days && db.days[dt] ? structuredClone(db.days[dt]) : null;
+  const day = makeDayFromForm();
+  if(existing){
+    day.rows = Object.assign({}, existing.rows || {}, day.rows || {});
+    Object.keys(day.rows || {}).forEach(ch => {
+      day.rows[ch] = mergeKeepExistingOnBlank((existing.rows || {})[ch] || {}, day.rows[ch] || {});
+    });
+    day.dfinery = mergeKeepExistingOnBlank(existing.dfinery || {}, day.dfinery || {});
+  }
+  db.days[day.dt] = day;
+  db.updated_at = new Date().toISOString();
+  loadDayToForm(false);
+  renderAll();
+  if(dbBackend === "supabase") await saveSupabaseDb(false);
+  if(dbHandle) await saveDbFile();
+}
+
+function dayRows(day){
+  if(!day) return [];
+
+  const dt = day.dt;
+  const webChannels = webChannelsForDate(dt);
+  const order = channelOrderForDate(dt);
+  const basis = day.basis || "landing";
+  const basisMetric = basis === "click" ? "banner_click" : "banner_landing";
+  const df = day.dfinery || {};
+  const normalized = {};
+
+  order.forEach(ch => {
+    normalized[ch] = Object.assign({}, (day.rows && day.rows[ch]) ? day.rows[ch] : {});
+  });
+
+  // WEB 투자는 보고용에서 항상 추적불가 처리
+  ["하나원큐(WEB)", "하나머니(WEB)"].forEach(ch => {
+    if(normalized[ch]) normalized[ch].invest = "추적불가";
+  });
+
+  // 2026-06-01부터 하나페이 WEB은 입력/보고/배분에서 제외
+  if(!isPayWebActive(dt)){
+    delete normalized["하나페이(WEB)"];
+  }
+
+  // 저장된 과거 데이터가 공란이어도 보고 시점에 Dfinery 기준으로 재보정
+  const denom = webChannels.reduce((s,ch)=>s+num(normalized[ch] ? normalized[ch][basisMetric] : 0),0);
+  if(denom){
+    ["deeplink_click","app_install","sdk_open","signup"].forEach(metric => {
+      if(isBlank(df[metric])) return;
+      const totalMetric = Math.round(num(df[metric]));
+      const allocated = allocateByLargestRemainder(totalMetric, webChannels.map(ch => ({
+        key: ch,
+        basis: normalized[ch] ? normalized[ch][basisMetric] : 0
+      })));
+      webChannels.forEach(ch => {
+        if(normalized[ch] && isBlank(normalized[ch][metric])){
+          normalized[ch][metric] = allocated[ch] || 0;
+        }
+      });
+    });
+  } else {
+    if(!isBlank(df.signup) && num(df.signup) === 0){
+      webChannels.forEach(ch => {
+        if(normalized[ch] && isBlank(normalized[ch].signup)) normalized[ch].signup = 0;
+      });
+    }
+  }
+
+  const rows = [];
+  order.forEach(ch=>{
+    const r = normalized[ch] || {};
+    const hasAny = ["banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest"].some(k=>!isBlank(r[k]));
+    if(!hasAny) return;
+    rows.push({date:day.dt, channel:ch, ...r});
+  });
+
+  const sum = {date:"일 합계", channel:"", banner_click:0, banner_landing:0, deeplink_click:0, app_install:0, sdk_open:0, signup:0, invest:0, memo:""};
+  rows.forEach(r=>{
+    ["banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest"].forEach(k=>{
+      if(typeof r[k] === "number" || Number.isFinite(Number(String(r[k]).replace(/,/g,"")))) sum[k] += num(r[k]);
+    });
+  });
+  rows.push(sum);
+  return rows;
+}
+
+function renderAll(){
+  const selected = document.getElementById("dt").value;
+  const filter = document.getElementById("viewFilter").value;
+  let keys = Object.keys(db.days || {}).sort((a,b)=>b.localeCompare(a));
+  if(filter === "selected") keys = keys.filter(k=>k===selected);
+  if(filter === "7" || filter === "30") keys = keys.slice(0, Number(filter));
+  const allRows = keys.flatMap(k=>dayRows(db.days[k]));
+  renderReport(allRows);
+  renderKpis(db.days[selected]);
+}
+
+function renderReport(rows){
+  const headers = ["일자","채널","배너 클릭","배너 랜딩","딥링크클릭","앱설치","딥링크 앱실행","신규회원","투자","비고"];
+  const fields = ["date","channel","banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest","memo"];
+  document.getElementById("reportTable").innerHTML =
+    `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>` +
+    `<tbody>${rows.map(r=>{
+      let cls = "";
+      if(r.date === "일 합계") cls = "sum";
+      else if(r.channel === "Dfinery") cls = "dfinery";
+      else if(String(r.channel).includes("SDK")) cls = "sdk";
+      return `<tr class="${cls}">${fields.map(f=>{
+        const v = r[f];
+        const na = (v === "N/A" || v === "추적불가") ? "na" : "";
+        return `<td class="${na}">${display(v)}</td>`;
+      }).join("")}</tr>`;
+    }).join("")}</tbody>`;
+}
+
+function renderKpis(day){
+  const rows = day ? dayRows(day).filter(r=>r.date==="일 합계") : [];
+  const s = rows[0] || {};
+  const items = [
+    ["배너클릭", s.banner_click, ""],
+    ["배너랜딩", s.banner_landing, pct(s.banner_landing, s.banner_click)+" / 클릭"],
+    ["딥링크", s.deeplink_click, pct(s.deeplink_click, s.banner_landing)+" / 랜딩"],
+    ["앱설치", s.app_install, pct(s.app_install, s.deeplink_click)+" / 딥링크"],
+    ["앱/SDK실행", s.sdk_open, pct(s.sdk_open, s.app_install)+" / 설치"],
+    ["신규회원", s.signup, pct(s.signup, s.sdk_open)+" / 실행"],
+    ["투자", s.invest, pct(s.invest, s.signup)+" / 회원"],
+    ["클릭→회원", s.signup, pct(s.signup, s.banner_click)]
+  ];
+  document.getElementById("kpis").innerHTML = items.map(([n,v,sub])=>`
+    <div class="kpi"><div class="name">${n}</div><div class="value">${display(v||0)}</div><div class="sub">${sub||"&nbsp;"}</div></div>
+  `).join("");
+}
+
+function loadDayToForm(showAlert = true){
+  const dt = document.getElementById("dt").value;
+  const day = db.days[dt];
+  if(!day){ if(showAlert) alert("선택한 날짜에 저장된 데이터가 없습니다."); return; }
+  document.getElementById("allocationBasis").value = day.basis || "landing";
+  document.getElementById("memo").value = day.memo || "";
+
+  const r1 = day.rows["하나원큐(WEB)"] || {};
+  setLanding("oneq", r1.banner_click, r1.banner_landing); setVal("oneq_open", r1.sdk_open); setVal("oneq_signup", r1.signup); setVal("oneq_memo", r1.memo);
+  const r2 = day.rows["하나머니(WEB)"] || {};
+  setLanding("money", r2.banner_click, r2.banner_landing); setVal("money_open", r2.sdk_open); setVal("money_signup", r2.signup); setVal("money_memo", r2.memo);
+  const r3 = day.rows["하나페이(WEB)"] || {};
+  setLanding("payweb", r3.banner_click, r3.banner_landing); setVal("payweb_open", r3.sdk_open); setVal("payweb_signup", r3.signup); setVal("payweb_memo", r3.memo);
+  const r4 = day.rows["하나페이(SDK)"] || {};
+  setVal("paysdk_click", r4.banner_click); setVal("paysdk_open", r4.sdk_open); setVal("paysdk_signup", r4.signup); setVal("paysdk_invest", r4.invest); setVal("paysdk_memo", r4.memo);
+  updatePayWebVisibility();
+  const d = day.dfinery || {};
+  setVal("df_deeplink", d.deeplink_click); setVal("df_install", d.app_install); setVal("df_open", d.sdk_open); setVal("df_signup", d.signup);
+}
+
+async function deleteDay(){
+  const dt = document.getElementById("dt").value;
+  if(!db.days[dt]){ alert("삭제할 데이터가 없습니다."); return; }
+  if(!confirm(`${dt} 데이터를 삭제할까요?`)) return;
+  delete db.days[dt];
+  db.updated_at = new Date().toISOString();
+  renderAll();
+  if(dbBackend === "supabase") await saveSupabaseDb(false);
+  if(dbHandle) await saveDbFile();
+}
+
+function clearForm(){
+  document.querySelectorAll("input").forEach(el=>{
+    if(!["dt","dbImportFile","migrationFile"].includes(el.id)) el.value = "";
+  });
+  ["oneq","money","payweb"].forEach(prefix => {
+    const mode = document.getElementById(prefix + "_landing_mode");
+    const landing = document.getElementById(prefix + "_landing");
+    if(mode) mode.value = "same";
+    if(landing) landing.disabled = true;
+  });
+  document.getElementById("memo").value = "";
+  updatePayWebVisibility();
+}
+
+function applyRecentPreset(){
+  clearForm();
+  document.getElementById("oneq_click").value = 1;
+  syncLanding("oneq");
+  document.getElementById("money_click").value = 255;
+  syncLanding("money");
+  document.getElementById("paysdk_click").value = 86;
+  document.getElementById("paysdk_open").value = 19;
+  document.getElementById("paysdk_signup").value = 10;
+  document.getElementById("paysdk_invest").value = 0;
+  document.getElementById("df_deeplink").value = 38;
+  document.getElementById("df_install").value = 1;
+  document.getElementById("df_open").value = 4;
+  document.getElementById("df_signup").value = 0;
+}
+
+function rowsForExport(){
+  const keys = Object.keys(db.days || {}).sort((a,b)=>b.localeCompare(a));
+  return keys.flatMap(k=>dayRows(db.days[k]));
+}
+
+function downloadReportCSV(){
+  const rows = rowsForExport();
+  const headers = ["일자","채널","배너 클릭","배너 랜딩","딥링크클릭","앱설치","딥링크 앱실행","신규회원","투자","비고"];
+  const fields = ["date","channel","banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest","memo"];
+  const esc = v => `"${String(v ?? "").replace(/"/g,'""')}"`;
+  const csv = "\ufeff" + [headers.join(",")].concat(rows.map(r=>fields.map(f=>esc(display(r[f]))).join(","))).join("\n");
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `onto_sdk_external_channel_report_${kstToday()}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function copyReportTSV(){
+  const rows = rowsForExport();
+  const headers = ["일자","채널","배너 클릭","배너 랜딩","딥링크클릭","앱설치","딥링크 앱실행","신규회원","투자","비고"];
+  const fields = ["date","channel","banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest","memo"];
+  const tsv = [headers.join("\t")].concat(rows.map(r=>fields.map(f=>display(r[f])).join("\t"))).join("\n");
+  await navigator.clipboard.writeText(tsv);
+  alert("보고 테이블을 클립보드에 복사했습니다. 엑셀/시트에 바로 붙여넣을 수 있습니다.");
+}
+
+function exportBackup(){
+  document.getElementById("backupText").value = JSON.stringify(db, null, 2);
+}
+function importBackup(){
+  try{
+    const obj = JSON.parse(document.getElementById("backupText").value);
+    db = normalizeDb(obj);
+    renderAll();
+    alert("복원했습니다. 파일로 남기려면 DB 저장을 누르세요.");
+  }catch(e){
+    alert("JSON 형식이 올바르지 않습니다.");
+  }
+}
+function mergeMigrationObject(obj){
+  const incoming = normalizeDb(obj);
+  const count = Object.keys(incoming.days || {}).length;
+  if(!count){ alert("가져올 날짜 데이터가 없습니다."); return; }
+  db.days ||= {};
+  Object.entries(incoming.days).forEach(([dt, day]) => db.days[dt] = day);
+  db.updated_at = new Date().toISOString();
+  syncSelectedDayForm();
+  renderAll();
+  alert(`${count}개 날짜 데이터를 반영했습니다. DB 저장을 누르세요.`);
+}
+function importMigrationText(){
+  try{
+    const obj = JSON.parse(document.getElementById("migrationText").value);
+    mergeMigrationObject(obj);
+  }catch(e){
+    alert("마이그레이션 JSON 형식이 올바르지 않습니다: " + e.message);
+  }
+}
+async function importMigrationFile(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    mergeMigrationObject(JSON.parse(text || "{}"));
+  }catch(e){
+    alert("마이그레이션 파일 가져오기 실패: " + e.message);
+  }finally{
+    event.target.value = "";
+  }
+}
+async function clearAll(){
+  if(!confirm("전체 DB 데이터를 삭제할까요?")) return;
+  db = emptyDb();
+  renderAll();
+  if(dbBackend === "supabase") await saveSupabaseDb(false);
+  if(dbHandle) await saveDbFile();
+}
+function showTab(name, btn){
+  ["migration","backup"].forEach(t => {
+    document.getElementById("tab-"+t).classList.toggle("hidden", name!==t);
+  });
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  btn.classList.add("active");
+}
+
+
+function onDateChange(){
+  updatePayWebVisibility();
+  const dt = document.getElementById("dt").value;
+  if(db.days && db.days[dt]){
+    loadDayToForm(false);
+  }else{
+    clearForm();
+    updatePayWebVisibility();
+  }
+  renderAll();
+}
+
+function datesForD5(){
+  const selected = document.getElementById("dt").value || kstToday();
+  const selectedTime = new Date(selected + "T00:00:00").getTime();
+  const minTime = selectedTime - 5 * 24 * 60 * 60 * 1000;
+  return Object.keys(db.days || {})
+    .filter(d => {
+      const t = new Date(d + "T00:00:00").getTime();
+      return t <= selectedTime && t >= minTime;
+    })
+    .sort((a,b)=>b.localeCompare(a));
+}
+
+function rowsForD5Image(){
+  const keys = datesForD5();
+  return keys.flatMap(k => dayRows(db.days[k]));
+}
+
+function getTextWidth(ctx, text, font){
+  ctx.font = font;
+  return ctx.measureText(String(text ?? "")).width;
+}
+
+function drawRoundRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function rowsToImageBlob(rows){
+  return new Promise((resolve, reject) => {
+    try{
+      const headers = ["일자","채널","배너 클릭","배너 랜딩","딥링크클릭","앱설치","딥링크 앱실행","신규회원","투자","비고"];
+      const fields = ["date","channel","banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest","memo"];
+      const titleDate = document.getElementById("dt").value || kstToday();
+
+      const font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Arial, sans-serif';
+      const boldFont = '700 13px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Arial, sans-serif';
+      const titleFont = '800 18px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", Arial, sans-serif';
+
+      const measure = document.createElement("canvas").getContext("2d");
+      const padX = 9;
+      const rowH = 34;
+      const titleH = 44;
+      const margin = 18;
+
+      const colWidths = headers.map((h, i) => {
+        const field = fields[i];
+        let maxW = getTextWidth(measure, h, boldFont);
+        rows.forEach(r => {
+          maxW = Math.max(maxW, getTextWidth(measure, display(r[field]), font));
+        });
+        const minW = [92, 122, 82, 82, 82, 72, 104, 72, 60, 120][i];
+        return Math.ceil(Math.max(minW, maxW + padX * 2 + 8));
+      });
+
+      const tableW = colWidths.reduce((a,b)=>a+b,0);
+      const tableH = rowH * (rows.length + 1);
+      const width = tableW + margin * 2;
+      const height = titleH + tableH + margin * 2;
+
+      const scale = Math.min(2, window.devicePixelRatio || 1.5);
+      const canvas = document.createElement("canvas");
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = "#111827";
+      ctx.font = titleFont;
+      ctx.textBaseline = "middle";
+      ctx.fillText(`온투 SDK 외부채널 통계 · ${titleDate} 기준 D-5`, margin, margin + 14);
+
+      let x0 = margin;
+      let y0 = margin + titleH;
+
+      ctx.strokeStyle = "#d9dee8";
+      ctx.lineWidth = 1;
+
+      // Header
+      let x = x0;
+      headers.forEach((h, i) => {
+        ctx.fillStyle = "#eef2f7";
+        ctx.fillRect(x, y0, colWidths[i], rowH);
+        ctx.strokeRect(x, y0, colWidths[i], rowH);
+        ctx.fillStyle = "#111827";
+        ctx.font = boldFont;
+        ctx.textBaseline = "middle";
+        const alignLeft = i === 0 || i === 1 || i === headers.length - 1;
+        const tx = alignLeft ? x + padX : x + colWidths[i] - padX - getTextWidth(ctx, h, boldFont);
+        ctx.fillText(h, tx, y0 + rowH / 2);
+        x += colWidths[i];
+      });
+
+      // Body
+      rows.forEach((r, ri) => {
+        let y = y0 + rowH * (ri + 1);
+        let bg = "#ffffff";
+        if(r.date === "일 합계") bg = "#fff7ed";
+        fields.forEach((f, i) => {
+          x = x0 + colWidths.slice(0, i).reduce((a,b)=>a+b,0);
+          const v = display(r[f]);
+          ctx.fillStyle = bg;
+          ctx.fillRect(x, y, colWidths[i], rowH);
+          ctx.strokeStyle = "#d9dee8";
+          ctx.strokeRect(x, y, colWidths[i], rowH);
+
+          const isNA = r[f] === "N/A" || r[f] === "추적불가";
+          ctx.fillStyle = isNA ? "#9ca3af" : "#111827";
+          ctx.font = r.date === "일 합계" ? boldFont : font;
+          ctx.textBaseline = "middle";
+
+          const alignLeft = i === 0 || i === 1 || i === fields.length - 1;
+          const tx = alignLeft ? x + padX : x + colWidths[i] - padX - getTextWidth(ctx, v, ctx.font);
+          ctx.fillText(v, tx, y + rowH / 2);
+        });
+      });
+
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("PNG 변환 실패")), "image/png");
+    }catch(e){
+      reject(e);
+    }
+  });
+}
+
+async function copyD5Image(){
+  const rows = rowsForD5Image();
+  if(!rows.length){
+    alert("기준일 포함 D-5 범위에 복사할 데이터가 없습니다.");
+    return;
+  }
+  try{
+    const blob = await rowsToImageBlob(rows);
+    if(navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({"image/png": blob})]);
+      alert("D-5 보고 테이블 이미지를 클립보드에 복사했습니다.");
+    }else{
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `onto_sdk_report_d5_${document.getElementById("dt").value || kstToday()}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      alert("브라우저가 이미지 클립보드를 지원하지 않아 PNG로 다운로드했습니다.");
+    }
+  }catch(e){
+    alert("이미지 복사 실패: " + e.message);
+  }
+}
+
+document.getElementById("dt").addEventListener("change", onDateChange);
+["oneq","money","payweb"].forEach(prefix => toggleLandingMode(prefix));
+setDbStatus(false, "DB 수동 연결");
+updatePayWebVisibility();
+renderAll();
+window.ontoSdkBootstrapped = true;
+if(window.ontoSdkUnlocked) initSupabaseAutoLoad();
+</script>
+</body>
+</html>
