@@ -359,7 +359,7 @@
 </main>
 
 <script>
-const AUTH_HASH = "2a01395cc6e9e79dc0641e1f5acb42f21e1d6eff68f26310941ac4b35f798e27";
+const AUTH_HASH = "30cb2a669a051dbc9ac095b2e68446bf51aaee3fd344fecc83298c422868ac77";
 async function sha256Hex(text){
   const bytes = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
