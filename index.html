@@ -390,6 +390,14 @@ function applyRolePermissions(){
     const writeAction = /saveDay|deleteDay|openDbFile|saveDbFile|saveDbFileAs|importDbFile|loadSupabaseDb|saveSupabaseDb|uploadCurrentDbToSupabase|importBackup|importMigration|clearAll|fillSample/.test(action);
     if(writeAction) btn.disabled = !editable;
   });
+  document.querySelectorAll(".tabs .tab").forEach(btn => {
+    const action = btn.getAttribute("onclick") || "";
+    if(/migration|backup/.test(action)) btn.style.display = editable ? "" : "none";
+  });
+  ["tab-migration", "tab-backup"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = editable ? "" : "none";
+  });
   const name = document.getElementById("dbName");
   if(name){
     const baseName = (name.textContent || "").replace(/\s*·\s*조회 전용$/g, "");
