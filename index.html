@@ -208,14 +208,14 @@
       </div>
 
       <div class="compact-input">
-        <div class="channel">하나페이(SDK)</div>
+        <div class="channel">하나페이(APP)</div>
         <input id="paysdk_click" type="number" placeholder="클릭">
         <select disabled><option>N/A</option></select>
         <input value="N/A" disabled>
-        <input id="paysdk_open" type="number" placeholder="SDK 실행">
+        <input id="paysdk_open" type="number" placeholder="실행">
         <input id="paysdk_signup" type="number" placeholder="신규회원">
         <input id="paysdk_invest" type="number" placeholder="투자" style="grid-column:auto;">
-        <input id="paysdk_memo" placeholder="페이SDK 비고">
+        <input id="paysdk_memo" placeholder="비고">
       </div>
 
       <div class="panel-title">Dfinery 총량 입력</div>
@@ -308,7 +308,7 @@
       <div class="grid">
         <div class="span8">
           <label>Excel VBA에서 추출한 마이그레이션 JSON 붙여넣기</label>
-          <textarea id="migrationText" placeholder="VBA가 생성한 onto_sdk_migration_input.json 내용을 붙여넣거나 JSON 파일 가져오기를 사용하세요."></textarea>
+          <textarea id="migrationText" placeholder="마이그레이션 JSON 내용을 붙여넣거나 JSON 파일 가져오기를 사용하세요."></textarea>
         </div>
         <div class="span4">
           <label>마이그레이션 작업</label>
@@ -405,7 +405,7 @@ let supabaseClient = null;
 
 function emptyDb(){
   return {
-    schema: "onto_sdk_external_channel_report_db",
+    schema: "metrics_report_db",
     version: DB_VERSION,
     updated_at: new Date().toISOString(),
     days: {}
@@ -413,14 +413,14 @@ function emptyDb(){
 }
 function normalizeDb(obj){
   if(!obj || typeof obj !== "object") return emptyDb();
-  if(obj.schema === "onto_sdk_external_channel_report_db") {
+  if(obj.schema === "metrics_report_db") {
     obj.days ||= {};
     obj.version ||= DB_VERSION;
     return obj;
   }
   // 과거 버전 호환: 날짜 객체만 들어있는 경우
   if(!obj.days) {
-    return {schema:"onto_sdk_external_channel_report_db", version:DB_VERSION, updated_at:new Date().toISOString(), days:obj};
+    return {schema:"metrics_report_db", version:DB_VERSION, updated_at:new Date().toISOString(), days:obj};
   }
   return obj;
 }
@@ -606,11 +606,11 @@ async function saveDbFileAs(){
   }
   try{
     const handle = await window.showSaveFilePicker({
-      suggestedName: "onto_sdk_external_channel_db.json",
+      suggestedName: "metrics_data.json",
       types: [{description:"JSON DB", accept: {"application/json":[".json"]}}]
     });
     dbHandle = handle;
-    dbFileName = handle.name || "onto_sdk_external_channel_db.json";
+    dbFileName = handle.name || "metrics_data.json";
     await saveDbFile();
   }catch(e){
     if(e.name !== "AbortError") alert("다른 이름 저장 실패: " + e.message);
@@ -621,7 +621,7 @@ function downloadDb(){
   const blob = new Blob([JSON.stringify(db, null, 2)], {type:"application/json;charset=utf-8"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "onto_sdk_external_channel_db.json";
+  a.download = "metrics_data.json";
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -736,7 +736,7 @@ function display(x, naText=""){
   if(typeof x === "number") return Math.round(x).toLocaleString("ko-KR");
   const n = Number(String(x).replace(/,/g,""));
   if(Number.isFinite(n)) return Math.round(n).toLocaleString("ko-KR");
-  return String(x);
+  return String(x).replaceAll("SDK", "APP").replaceAll("온투", "서비스");
 }
 function pct(a,b){
   a = num(a); b = num(b);
@@ -1004,7 +1004,7 @@ function renderKpis(day){
     ["배너랜딩", s.banner_landing, pct(s.banner_landing, s.banner_click)+" / 클릭"],
     ["딥링크", s.deeplink_click, pct(s.deeplink_click, s.banner_landing)+" / 랜딩"],
     ["앱설치", s.app_install, pct(s.app_install, s.deeplink_click)+" / 딥링크"],
-    ["앱/SDK실행", s.sdk_open, pct(s.sdk_open, s.app_install)+" / 설치"],
+    ["앱실행", s.sdk_open, pct(s.sdk_open, s.app_install)+" / 설치"],
     ["신규회원", s.signup, pct(s.signup, s.sdk_open)+" / 실행"],
     ["투자", s.invest, pct(s.invest, s.signup)+" / 회원"],
     ["클릭→회원", s.signup, pct(s.signup, s.banner_click)]
@@ -1089,7 +1089,7 @@ function downloadReportCSV(){
   const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `onto_sdk_external_channel_report_${kstToday()}.csv`;
+  a.download = `metrics_report_${kstToday()}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -1324,7 +1324,7 @@ async function copyD5Image(){
     }else{
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `onto_sdk_report_d5_${document.getElementById("dt").value || kstToday()}.png`;
+      a.download = `metrics_d5_${document.getElementById("dt").value || kstToday()}.png`;
       a.click();
       URL.revokeObjectURL(a.href);
       alert("브라우저가 이미지 클립보드를 지원하지 않아 PNG로 다운로드했습니다.");
