@@ -359,20 +359,54 @@
 </main>
 
 <script>
-const AUTH_HASH = "30cb2a669a051dbc9ac095b2e68446bf51aaee3fd344fecc83298c422868ac77";
+const AUTH_USERS = [
+  { hash: "30cb2a669a051dbc9ac095b2e68446bf51aaee3fd344fecc83298c422868ac77", role: "viewer" },
+  { hash: "3c961d66f8c83a18e7e3ed935466b386e94e104a218acd3f694890a89f02e472", role: "editor" }
+];
+let currentRole = "viewer";
 async function sha256Hex(text){
   const bytes = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
-function unlockApp(){
+function canEdit(){
+  return currentRole === "editor";
+}
+function requireEditor(action = "데이터 입력"){
+  if(canEdit()) return true;
+  alert(`${action} 권한이 없습니다. 조회 전용 계정입니다.`);
+  return false;
+}
+function applyRolePermissions(){
+  const editable = canEdit();
+  document.querySelectorAll("main input, main select, main textarea").forEach(el => {
+    if(["dt", "viewFilter"].includes(el.id)) return;
+    if(el.closest("#tab-backup") || el.closest("#tab-migration") || el.closest(".compact-input")){
+      el.disabled = !editable;
+    }
+  });
+  document.querySelectorAll("main button").forEach(btn => {
+    const action = btn.getAttribute("onclick") || "";
+    const writeAction = /saveDay|deleteDay|openDbFile|saveDbFile|saveDbFileAs|importDbFile|loadSupabaseDb|saveSupabaseDb|uploadCurrentDbToSupabase|importBackup|importMigration|clearAll|fillSample/.test(action);
+    if(writeAction) btn.disabled = !editable;
+  });
+  const name = document.getElementById("dbName");
+  if(name){
+    const baseName = (name.textContent || "").replace(/\s*·\s*조회 전용$/g, "");
+    name.textContent = editable ? baseName : `${baseName} · 조회 전용`;
+  }
+}
+function unlockApp(role = "viewer"){
+  currentRole = role;
   document.body.classList.remove("auth-locked");
   window.ontoSdkUnlocked = true;
   if(window.ontoSdkBootstrapped && typeof initSupabaseAutoLoad === "function"){
     initSupabaseAutoLoad();
   }
+  setTimeout(applyRolePermissions, 0);
 }
-if(sessionStorage.getItem("onto_sdk_auth") === "ok") unlockApp();
+const savedRole = sessionStorage.getItem("onto_sdk_role");
+if(savedRole === "viewer" || savedRole === "editor") unlockApp(savedRole);
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("authForm");
   if(!form) return;
@@ -381,9 +415,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const id = document.getElementById("authId").value.trim();
     const pw = document.getElementById("authPw").value;
     const hash = await sha256Hex(`${id}:${pw}`);
-    if(hash === AUTH_HASH){
-      sessionStorage.setItem("onto_sdk_auth", "ok");
-      unlockApp();
+    const user = AUTH_USERS.find(item => item.hash === hash);
+    if(user){
+      sessionStorage.setItem("onto_sdk_role", user.role);
+      unlockApp(user.role);
     }else{
       document.getElementById("authError").textContent = "아이디 또는 비밀번호가 맞지 않습니다.";
     }
@@ -485,6 +520,7 @@ async function loadSupabaseDb(showAlert = true){
   }
 }
 async function saveSupabaseDb(showAlert = true){
+  if(!requireEditor("Supabase 저장")) return false;
   const client = getSupabaseClient();
   if(!client){
     if(showAlert) alert("Supabase 설정 또는 클라이언트 로드가 필요합니다.");
@@ -512,6 +548,7 @@ async function saveSupabaseDb(showAlert = true){
   }
 }
 async function uploadCurrentDbToSupabase(){
+  if(!requireEditor("Supabase 업로드")) return;
   const ok = await saveSupabaseDb(false);
   if(ok) alert("현재 화면의 DB를 Supabase로 업로드했습니다.");
 }
@@ -532,6 +569,7 @@ function syncSelectedDayForm(){
   updatePayWebVisibility();
 }
 async function openDbFile(){
+  if(!requireEditor("DB 열기")) return;
   if(!window.showOpenFilePicker){
     const fallback = document.getElementById("dbOpenFallbackFile") || document.getElementById("dbImportFile");
     if(fallback){
@@ -560,6 +598,7 @@ async function openDbFile(){
   }
 }
 async function openDbFileFallback(event){
+  if(!requireEditor("DB 열기")) return;
   const file = event.target.files[0];
   if(!file) return;
   try{
@@ -579,6 +618,7 @@ async function openDbFileFallback(event){
 }
 
 async function saveDbFile(){
+  if(!requireEditor("DB 저장")) return;
   db.updated_at = new Date().toISOString();
   if(dbBackend === "supabase"){
     await saveSupabaseDb();
@@ -599,6 +639,7 @@ async function saveDbFile(){
   downloadDb();
 }
 async function saveDbFileAs(){
+  if(!requireEditor("DB 저장")) return;
   db.updated_at = new Date().toISOString();
   if(!window.showSaveFilePicker){
     downloadDb();
@@ -882,6 +923,7 @@ function makeDayFromForm(){
 }
 
 async function saveDay(){
+  if(!requireEditor("보고 행 저장")) return;
   const dt = document.getElementById("dt").value || kstToday();
   const existing = db.days && db.days[dt] ? structuredClone(db.days[dt]) : null;
   const day = makeDayFromForm();
@@ -976,6 +1018,7 @@ function renderAll(){
   const allRows = keys.flatMap(k=>dayRows(db.days[k]));
   renderReport(allRows);
   renderKpis(db.days[selected]);
+  applyRolePermissions();
 }
 
 function renderReport(rows){
@@ -1035,6 +1078,7 @@ function loadDayToForm(showAlert = true){
 }
 
 async function deleteDay(){
+  if(!requireEditor("일자 삭제")) return;
   const dt = document.getElementById("dt").value;
   if(!db.days[dt]){ alert("삭제할 데이터가 없습니다."); return; }
   if(!confirm(`${dt} 데이터를 삭제할까요?`)) return;
@@ -1060,6 +1104,7 @@ function clearForm(){
 }
 
 function applyRecentPreset(){
+  if(!requireEditor("샘플 입력")) return;
   clearForm();
   document.getElementById("oneq_click").value = 1;
   syncLanding("oneq");
@@ -1107,6 +1152,7 @@ function exportBackup(){
   document.getElementById("backupText").value = JSON.stringify(db, null, 2);
 }
 function importBackup(){
+  if(!requireEditor("백업 복원")) return;
   try{
     const obj = JSON.parse(document.getElementById("backupText").value);
     db = normalizeDb(obj);
@@ -1117,6 +1163,7 @@ function importBackup(){
   }
 }
 function mergeMigrationObject(obj){
+  if(!requireEditor("마이그레이션 반영")) return;
   const incoming = normalizeDb(obj);
   const count = Object.keys(incoming.days || {}).length;
   if(!count){ alert("가져올 날짜 데이터가 없습니다."); return; }
@@ -1128,6 +1175,7 @@ function mergeMigrationObject(obj){
   alert(`${count}개 날짜 데이터를 반영했습니다. DB 저장을 누르세요.`);
 }
 function importMigrationText(){
+  if(!requireEditor("마이그레이션 반영")) return;
   try{
     const obj = JSON.parse(document.getElementById("migrationText").value);
     mergeMigrationObject(obj);
@@ -1136,6 +1184,7 @@ function importMigrationText(){
   }
 }
 async function importMigrationFile(event){
+  if(!requireEditor("마이그레이션 파일 가져오기")) return;
   const file = event.target.files[0];
   if(!file) return;
   try{
@@ -1148,6 +1197,7 @@ async function importMigrationFile(event){
   }
 }
 async function clearAll(){
+  if(!requireEditor("전체 초기화")) return;
   if(!confirm("전체 DB 데이터를 삭제할까요?")) return;
   db = emptyDb();
   renderAll();
