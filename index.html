@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>온투 SDK 외부채널 통계 입력기 - 외부 DB</title>
+  <title>Daily Metrics Viewer</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -133,7 +133,7 @@
 <body class="auth-locked">
 <div class="auth-screen">
   <form class="auth-panel" id="authForm">
-    <h2>온투 SDK 통계</h2>
+    <h2>Metrics Viewer</h2>
     <div class="auth-fields">
       <label>아이디<input id="authId" autocomplete="username"></label>
       <label>비밀번호<input id="authPw" type="password" autocomplete="current-password"></label>
@@ -143,7 +143,7 @@
   </form>
 </div>
 <header>
-  <h1>온투 SDK 외부채널 통계 입력기</h1>
+  <h1>Daily Metrics Viewer</h1>
   
 </header>
 
@@ -1256,7 +1256,7 @@ function rowsToImageBlob(rows){
       ctx.fillStyle = "#111827";
       ctx.font = titleFont;
       ctx.textBaseline = "middle";
-      ctx.fillText(`온투 SDK 외부채널 통계 · ${titleDate} 기준 D-5`, margin, margin + 14);
+      ctx.fillText(`Daily Metrics · ${titleDate} D-5`, margin, margin + 14);
 
       let x0 = margin;
       let y0 = margin + titleH;
