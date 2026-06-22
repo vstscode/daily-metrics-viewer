@@ -1030,11 +1030,11 @@ function renderAll(){
 }
 
 function renderReport(rows){
-  const headers = ["일자","채널","배너 클릭","배너 랜딩","딥링크클릭","앱설치","앱실행","신규회원","투자","비고"];
+  const headers = ["일자","채널","클릭","랜딩","딥링크","설치","실행","회원","투자","비고"];
   const fields = ["date","channel","banner_click","banner_landing","deeplink_click","app_install","sdk_open","signup","invest","memo"];
-  const colWidths = [92, 128, 84, 84, 86, 70, 76, 76, 60, 150];
+  const colWidths = ["9%","16%","8%","8%","8%","7%","7%","7%","6%","24%"];
   document.getElementById("reportTable").innerHTML =
-    `<colgroup>${colWidths.map(w=>`<col style="width:${w}px">`).join("")}</colgroup>` +
+    `<colgroup>${colWidths.map(w=>`<col style="width:${w}">`).join("")}</colgroup>` +
     `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>` +
     `<tbody>${rows.map(r=>{
       let cls = "";
