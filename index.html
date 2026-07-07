@@ -308,14 +308,12 @@
       <div class="grid">
         <div class="span8">
           <label>Excel VBA에서 추출한 마이그레이션 JSON 붙여넣기</label>
-          <textarea id="migrationText" placeholder="마이그레이션 JSON 내용을 붙여넣거나 JSON 파일 가져오기를 사용하세요."></textarea>
+          <textarea id="migrationText" placeholder="마이그레이션 JSON 또는 Zeppelin JSON 내용을 붙여넣으세요."></textarea>
         </div>
         <div class="span4">
           <label>마이그레이션 작업</label>
           <div class="row">
             <button class="primary" onclick="importMigrationText()">붙여넣은 JSON 반영</button>
-            <input id="migrationFile" type="file" accept=".json,application/json" style="display:none" onchange="importMigrationFile(event)">
-            <button class="ghost" onclick="document.getElementById('migrationFile').click()">마이그레이션 JSON 가져오기</button>
           </div>
         </div>
         <div class="span8">
@@ -326,10 +324,9 @@
           <label>Zeppelin 작업</label>
           <div class="row">
             <button class="primary" onclick="importZeppelinText()">Zeppelin JSON 반영</button>
-            <input id="zeppelinFile" type="file" accept=".json,application/json" style="display:none" onchange="importZeppelinFile(event)">
-            <button class="ghost" onclick="document.getElementById('zeppelinFile').click()">Zeppelin JSON 가져오기</button>
           </div>
           <p class="mini">HANAPAY rows의 signup_member_count는 신규회원, invest_count는 투자로 반영합니다.</p>
+          <p id="zeppelinResult" class="mini"></p>
         </div>
       </div>
     </div>
@@ -1114,7 +1111,7 @@ async function deleteDay(){
 
 function clearForm(){
   document.querySelectorAll("input").forEach(el=>{
-    if(!["dt","dbImportFile","migrationFile"].includes(el.id)) el.value = "";
+    if(!["dt","dbImportFile"].includes(el.id)) el.value = "";
   });
   ["oneq","money","payweb"].forEach(prefix => {
     const mode = document.getElementById(prefix + "_landing_mode");
@@ -1283,7 +1280,10 @@ async function mergeZeppelinObject(obj, showAlert = true){
   renderAll();
   if(dbBackend === "supabase") await saveSupabaseDb(false);
   if(dbHandle) await saveDbFile();
-  if(showAlert) alert(`${touched.size}개 날짜, ${updated}개 값을 반영했습니다.`);
+  const resultText = `${touched.size}개 날짜, ${updated}개 값을 반영했습니다.`;
+  const resultEl = document.getElementById("zeppelinResult");
+  if(resultEl) resultEl.textContent = resultText;
+  if(showAlert) alert(resultText);
 }
 function mergeMigrationObject(obj){
   if(!requireEditor("마이그레이션 반영")) return;
@@ -1317,32 +1317,6 @@ async function importZeppelinText(){
     await mergeZeppelinObject(obj);
   }catch(e){
     alert("Zeppelin JSON 형식이 올바르지 않습니다: " + e.message);
-  }
-}
-async function importMigrationFile(event){
-  if(!requireEditor("마이그레이션 파일 가져오기")) return;
-  const file = event.target.files[0];
-  if(!file) return;
-  try{
-    const text = await file.text();
-    mergeMigrationObject(JSON.parse(text || "{}"));
-  }catch(e){
-    alert("마이그레이션 파일 가져오기 실패: " + e.message);
-  }finally{
-    event.target.value = "";
-  }
-}
-async function importZeppelinFile(event){
-  if(!requireEditor("Zeppelin 파일 가져오기")) return;
-  const file = event.target.files[0];
-  if(!file) return;
-  try{
-    const text = await file.text();
-    await mergeZeppelinObject(JSON.parse(text || "{}"));
-  }catch(e){
-    alert("Zeppelin 파일 가져오기 실패: " + e.message);
-  }finally{
-    event.target.value = "";
   }
 }
 async function clearAll(){
