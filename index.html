@@ -318,6 +318,19 @@
             <button class="ghost" onclick="document.getElementById('migrationFile').click()">마이그레이션 JSON 가져오기</button>
           </div>
         </div>
+        <div class="span8">
+          <label>Zeppelin JSON 붙여넣기</label>
+          <textarea id="zeppelinText" placeholder='{"meta":{"job_name":"hanapay_daily"},"rows":[{"dt":"20260706","channel":"HANAPAY","signup_member_count":17,"invest_count":0}]}'></textarea>
+        </div>
+        <div class="span4">
+          <label>Zeppelin 작업</label>
+          <div class="row">
+            <button class="primary" onclick="importZeppelinText()">Zeppelin JSON 반영</button>
+            <input id="zeppelinFile" type="file" accept=".json,application/json" style="display:none" onchange="importZeppelinFile(event)">
+            <button class="ghost" onclick="document.getElementById('zeppelinFile').click()">Zeppelin JSON 가져오기</button>
+          </div>
+          <p class="mini">HANAPAY rows의 signup_member_count는 신규회원, invest_count는 투자로 반영합니다.</p>
+        </div>
       </div>
     </div>
     <div id="tab-backup" class="hidden">
@@ -387,7 +400,7 @@ function applyRolePermissions(){
   });
   document.querySelectorAll("main button").forEach(btn => {
     const action = btn.getAttribute("onclick") || "";
-    const writeAction = /saveDay|deleteDay|openDbFile|saveDbFile|saveDbFileAs|importDbFile|loadSupabaseDb|saveSupabaseDb|uploadCurrentDbToSupabase|importBackup|importMigration|clearAll|fillSample/.test(action);
+    const writeAction = /saveDay|deleteDay|openDbFile|saveDbFile|saveDbFileAs|importDbFile|loadSupabaseDb|saveSupabaseDb|uploadCurrentDbToSupabase|importBackup|importMigration|importZeppelin|clearAll|fillSample/.test(action);
     if(writeAction) btn.disabled = !editable;
   });
   document.querySelectorAll(".tabs .tab").forEach(btn => {
@@ -1172,8 +1185,112 @@ function importBackup(){
     alert("JSON 형식이 올바르지 않습니다.");
   }
 }
+function isZeppelinMetricsObject(obj){
+  return !!(obj && typeof obj === "object" && Array.isArray(obj.rows) && obj.rows.some(row =>
+    row && typeof row === "object" &&
+    ("signup_member_count" in row || "invest_count" in row || "invest_member_count" in row)
+  ));
+}
+function normalizeZeppelinDate(dt){
+  const s = String(dt || "").replace(/[^0-9]/g, "");
+  if(s.length !== 8) return "";
+  return `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`;
+}
+function numberOrBlank(value){
+  if(value === "" || value === null || value === undefined) return "";
+  const n = Number(String(value).replace(/,/g, "").trim());
+  return Number.isFinite(n) ? n : "";
+}
+function ensureMetricsDay(dt){
+  db.days ||= {};
+  if(db.days[dt]) return db.days[dt];
+  const rows = {};
+  channelOrderForDate(dt).forEach(ch => {
+    const isSdk = ch.includes("SDK");
+    rows[ch] = {
+      banner_click: "",
+      banner_landing: isSdk ? "N/A" : "",
+      deeplink_click: isSdk ? "N/A" : "",
+      app_install: isSdk ? "N/A" : "",
+      sdk_open: "",
+      signup: "",
+      invest: ch === "하나원큐(WEB)" || ch === "하나머니(WEB)" ? "추적불가" : "",
+      memo: ""
+    };
+  });
+  db.days[dt] = {
+    dt,
+    basis: "landing",
+    memo: "",
+    rows,
+    dfinery: {
+      banner_click: "",
+      banner_landing: "",
+      deeplink_click: "",
+      app_install: "",
+      sdk_open: "",
+      signup: "",
+      invest: ""
+    },
+    updated_at: new Date().toISOString()
+  };
+  return db.days[dt];
+}
+async function mergeZeppelinObject(obj, showAlert = true){
+  if(!requireEditor("Zeppelin JSON 반영")) return;
+  if(!isZeppelinMetricsObject(obj)){
+    alert("Zeppelin JSON rows에서 signup_member_count 또는 invest_count를 찾지 못했습니다.");
+    return;
+  }
+  const touched = new Set();
+  let updated = 0;
+  (obj.rows || []).forEach(row => {
+    const dt = normalizeZeppelinDate(row.dt);
+    const channel = String(row.channel || "").toUpperCase();
+    if(!dt || channel !== "HANAPAY") return;
+    const day = ensureMetricsDay(dt);
+    day.rows ||= {};
+    const sdkChannel = channelOrderForDate(dt).find(ch => ch.includes("SDK")) || "하나페이(SDK)";
+    day.rows[sdkChannel] ||= {
+      banner_click: "",
+      banner_landing: "N/A",
+      deeplink_click: "N/A",
+      app_install: "N/A",
+      sdk_open: "",
+      signup: "",
+      invest: "",
+      memo: ""
+    };
+    const signup = numberOrBlank(row.signup_member_count);
+    const invest = numberOrBlank(("invest_count" in row) ? row.invest_count : row.invest_member_count);
+    if(signup !== "") {
+      day.rows[sdkChannel].signup = signup;
+      updated += 1;
+    }
+    if(invest !== "") {
+      day.rows[sdkChannel].invest = invest;
+      updated += 1;
+    }
+    day.updated_at = new Date().toISOString();
+    touched.add(dt);
+  });
+  if(!touched.size){
+    alert("반영할 HANAPAY 날짜 데이터가 없습니다.");
+    return;
+  }
+  db.updated_at = new Date().toISOString();
+  syncSelectedDayForm();
+  renderAll();
+  if(dbBackend === "supabase") await saveSupabaseDb(false);
+  if(dbHandle) await saveDbFile();
+  if(showAlert) alert(`${touched.size}개 날짜, ${updated}개 값을 반영했습니다.`);
+}
 function mergeMigrationObject(obj){
   if(!requireEditor("마이그레이션 반영")) return;
+  if(isZeppelinMetricsObject(obj)){
+    mergeZeppelinObject(obj);
+    return;
+  }
   const incoming = normalizeDb(obj);
   const count = Object.keys(incoming.days || {}).length;
   if(!count){ alert("가져올 날짜 데이터가 없습니다."); return; }
@@ -1193,6 +1310,15 @@ function importMigrationText(){
     alert("마이그레이션 JSON 형식이 올바르지 않습니다: " + e.message);
   }
 }
+async function importZeppelinText(){
+  if(!requireEditor("Zeppelin JSON 반영")) return;
+  try{
+    const obj = JSON.parse(document.getElementById("zeppelinText").value);
+    await mergeZeppelinObject(obj);
+  }catch(e){
+    alert("Zeppelin JSON 형식이 올바르지 않습니다: " + e.message);
+  }
+}
 async function importMigrationFile(event){
   if(!requireEditor("마이그레이션 파일 가져오기")) return;
   const file = event.target.files[0];
@@ -1202,6 +1328,19 @@ async function importMigrationFile(event){
     mergeMigrationObject(JSON.parse(text || "{}"));
   }catch(e){
     alert("마이그레이션 파일 가져오기 실패: " + e.message);
+  }finally{
+    event.target.value = "";
+  }
+}
+async function importZeppelinFile(event){
+  if(!requireEditor("Zeppelin 파일 가져오기")) return;
+  const file = event.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    await mergeZeppelinObject(JSON.parse(text || "{}"));
+  }catch(e){
+    alert("Zeppelin 파일 가져오기 실패: " + e.message);
   }finally{
     event.target.value = "";
   }
