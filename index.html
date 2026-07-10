@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Daily Metrics Viewer</title>
+  <link rel="icon" href="data:,">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
@@ -17,26 +18,30 @@
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",Arial,sans-serif;
       font-size:14px;
     }
-    header { padding:20px 26px 8px; }
-    h1 { margin:0 0 7px; font-size:23px; }
+    header { padding:20px 26px 8px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    h1 { margin:0; font-size:23px; text-wrap:balance; }
+    .header-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+    .nowrap { white-space:nowrap; }
     .desc { color:var(--muted); line-height:1.5; }
     main { padding:10px 26px 34px; display:grid; gap:14px; }
     .card {
-      background:var(--card); border:1px solid var(--line); border-radius:14px;
-      padding:15px; box-shadow:0 1px 2px rgba(15,23,42,.04);
+      background:var(--card); border:1px solid var(--line); border-radius:8px;
+      padding:15px; box-shadow:0 1px 2px rgba(15,23,42,.04); min-width:0;
     }
-    .grid { display:grid; grid-template-columns:repeat(12, 1fr); gap:12px; }
+    .grid { display:grid; grid-template-columns:repeat(12, minmax(0, 1fr)); gap:12px; min-width:0; }
     .span4 { grid-column:span 4; }
     .span6 { grid-column:span 6; }
     .span8 { grid-column:span 8; }
     .span12 { grid-column:span 12; }
     label { display:block; font-weight:800; margin-bottom:6px; font-size:13px; }
     input, select, button, textarea {
-      font:inherit; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--text);
+      font:inherit; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--text);
     }
     input, select { width:100%; padding:8px 9px; height:38px; }
     textarea { width:100%; min-height:86px; padding:10px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; }
     button { padding:9px 12px; font-weight:800; cursor:pointer; height:38px; }
+    button:disabled { cursor:not-allowed; opacity:.48; }
+    button[hidden] { display:none !important; }
     button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
     button.ghost { background:#fff; }
     button.danger { color:var(--danger); border-color:#fecaca; background:#fff; }
@@ -49,10 +54,10 @@
     .badge.danger { color:var(--danger); border-color:#fecaca; background:#fef2f2; }
     .badge.gray { color:#475569; border-color:#cbd5e1; background:#f8fafc; }
     .table-wrap {
-      overflow:auto; border:1px solid var(--line); border-radius:12px; background:#fff;
+      overflow:auto; width:100%; border:1px solid var(--line); border-radius:8px; background:#fff;
       max-height:640px;
     }
-    table { border-collapse:separate; border-spacing:0; width:100%; font-size:13px; table-layout:fixed; }
+    table { border-collapse:separate; border-spacing:0; width:100%; min-width:980px; font-size:13px; table-layout:fixed; }
     th, td { border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 8px; white-space:nowrap; text-align:right; overflow:hidden; text-overflow:ellipsis; }
     th:first-child, td:first-child, th:nth-child(2), td:nth-child(2), th:last-child, td:last-child { text-align:left; }
     th { position:sticky; top:0; z-index:2; background:var(--head); font-weight:900; }
@@ -62,10 +67,10 @@
     tr.sdk td:first-child, tr.sdk td:nth-child(2) { background:var(--sdk); }
     tr:hover td { filter:brightness(.985); }
     .kpis { display:grid; grid-template-columns:repeat(8, minmax(110px, 1fr)); gap:9px; }
-    .kpi { border:1px solid var(--line); border-radius:12px; padding:10px; background:#fbfdff; }
+    .kpi { border:1px solid var(--line); border-radius:8px; padding:10px; background:#fbfdff; }
     .kpi .name { color:var(--muted); font-size:12px; margin-bottom:4px; }
     .kpi .value { font-weight:900; font-size:19px; }
-    .kpi .sub { color:var(--muted); font-size:11px; margin-top:3px; }
+    .kpi .sub { color:var(--muted); font-size:11px; margin-top:3px; min-height:1em; }
     .mini { font-size:12px; color:var(--muted); }
     .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
     .tabs { display:flex; gap:8px; margin-bottom:12px; }
@@ -114,6 +119,14 @@
       .compact-input, .compact-head { grid-template-columns: 1fr 1fr; }
       .compact-head { display:none; }
     }
+    @media (max-width:640px) {
+      header { padding:18px 18px 8px; align-items:flex-start; }
+      h1 { font-size:19px; }
+      main { padding:10px 18px 28px; }
+      .header-actions .mini { display:none; }
+      .card { padding:12px; }
+      .kpis { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+    }
     body.auth-locked header,
     body.auth-locked main { display:none; }
     .auth-screen {
@@ -123,7 +136,7 @@
     body.auth-locked .auth-screen { display:flex; }
     .auth-panel {
       width:min(380px, 100%); background:#fff; border:1px solid var(--line);
-      border-radius:14px; padding:22px; box-shadow:0 10px 30px rgba(15,23,42,.12);
+      border-radius:8px; padding:22px; box-shadow:0 10px 30px rgba(15,23,42,.12);
     }
     .auth-panel h2 { margin:0 0 14px; font-size:20px; }
     .auth-panel .auth-fields { display:grid; gap:10px; }
@@ -144,7 +157,11 @@
 </div>
 <header>
   <h1>Daily Metrics Viewer</h1>
-  
+  <div class="header-actions">
+    <span id="dataFreshness" class="mini nowrap"></span>
+    <span id="roleBadge" class="badge gray">조회 전용</span>
+    <button class="ghost" type="button" onclick="logoutApp()">로그아웃</button>
+  </div>
 </header>
 
 <main>
@@ -210,8 +227,8 @@
       <div class="compact-input">
         <div class="channel">하나페이(APP)</div>
         <input id="paysdk_click" type="number" placeholder="클릭">
-        <select disabled><option>N/A</option></select>
-        <input value="N/A" disabled>
+        <select disabled data-static-disabled="true" aria-label="하나페이 APP 랜딩 옵션"><option>N/A</option></select>
+        <input value="N/A" disabled data-static-disabled="true" aria-label="하나페이 APP 배너 랜딩">
         <input id="paysdk_open" type="number" placeholder="실행">
         <input id="paysdk_signup" type="number" placeholder="신규회원">
         <input id="paysdk_invest" type="number" placeholder="투자" style="grid-column:auto;">
@@ -228,8 +245,8 @@
         <input id="df_install" type="number" placeholder="설치">
         <input id="df_open" type="number" placeholder="앱실행">
         <input id="df_signup" type="number" placeholder="신규회원">
-        <input disabled>
-        <input disabled>
+        <input disabled data-static-disabled="true" aria-hidden="true">
+        <input disabled data-static-disabled="true" aria-hidden="true">
       </div>
 
       <div class="panel-title">추가 옵션</div>
@@ -267,6 +284,7 @@
         <button class="ghost" onclick="clearForm()">입력칸 비우기</button>
         <button class="danger" onclick="deleteDay()">선택일 삭제</button>
       </div>
+      <div id="actionStatus" class="mini" aria-live="polite" style="margin-top:10px;"></div>
       <div style="height:14px"></div>
       <label>표시 범위</label>
       <select id="viewFilter" onchange="renderAll()">
@@ -299,7 +317,7 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card" id="adminSection">
     <div class="tabs">
       <button class="tab active" onclick="showTab('migration', this)">마이그레이션</button>
       <button class="tab" onclick="showTab('backup', this)">DB/백업</button>
@@ -387,18 +405,49 @@ function requireEditor(action = "데이터 입력"){
   alert(`${action} 권한이 없습니다. 조회 전용 계정입니다.`);
   return false;
 }
+function setActionStatus(message = "", tone = ""){
+  const el = document.getElementById("actionStatus");
+  if(!el) return;
+  el.textContent = message;
+  el.style.color = tone === "error" ? "var(--danger)" : tone === "ok" ? "var(--ok)" : "var(--muted)";
+}
+function updateHeaderStatus(){
+  const roleBadge = document.getElementById("roleBadge");
+  if(roleBadge){
+    roleBadge.className = canEdit() ? "badge ok" : "badge gray";
+    roleBadge.textContent = canEdit() ? "편집 가능" : "조회 전용";
+  }
+  const freshness = document.getElementById("dataFreshness");
+  if(freshness){
+    const dates = Object.keys((db && db.days) || {}).sort((a,b)=>b.localeCompare(a));
+    freshness.textContent = dates.length ? `최신 ${dates[0]} · ${dates.length}일` : "데이터 없음";
+  }
+}
 function applyRolePermissions(){
   const editable = canEdit();
   document.querySelectorAll("main input, main select, main textarea").forEach(el => {
     if(["dt", "viewFilter"].includes(el.id)) return;
     if(el.closest("#tab-backup") || el.closest("#tab-migration") || el.closest(".compact-input")){
-      el.disabled = !editable;
+      if(!editable){
+        el.disabled = true;
+      }else if(el.dataset.staticDisabled === "true"){
+        el.disabled = true;
+      }else if(el.id && el.id.endsWith("_landing")){
+        const prefix = el.id.replace(/_landing$/, "");
+        const mode = document.getElementById(prefix + "_landing_mode");
+        el.disabled = !mode || mode.value !== "manual";
+      }else{
+        el.disabled = false;
+      }
     }
   });
   document.querySelectorAll("main button").forEach(btn => {
     const action = btn.getAttribute("onclick") || "";
-    const writeAction = /saveDay|deleteDay|openDbFile|saveDbFile|saveDbFileAs|importDbFile|loadSupabaseDb|saveSupabaseDb|uploadCurrentDbToSupabase|importBackup|importMigration|importZeppelin|clearAll|fillSample/.test(action);
-    if(writeAction) btn.disabled = !editable;
+    const writeAction = /saveDay|deleteDay|clearForm|openDbFile|saveDbFile|saveDbFileAs|importDbFile|saveSupabaseDb|uploadCurrentDbToSupabase|importBackup|importMigration|importZeppelin|clearAll|fillSample|applyRecentPreset/.test(action);
+    if(writeAction){
+      btn.disabled = !editable;
+      btn.hidden = !editable && Boolean(btn.closest(".right-actions"));
+    }
   });
   document.querySelectorAll(".tabs .tab").forEach(btn => {
     const action = btn.getAttribute("onclick") || "";
@@ -408,11 +457,18 @@ function applyRolePermissions(){
     const el = document.getElementById(id);
     if(el) el.style.display = editable ? "" : "none";
   });
+  const adminSection = document.getElementById("adminSection");
+  if(adminSection) adminSection.style.display = editable ? "" : "none";
   const name = document.getElementById("dbName");
   if(name){
     const baseName = (name.textContent || "").replace(/\s*·\s*조회 전용$/g, "");
     name.textContent = editable ? baseName : `${baseName} · 조회 전용`;
   }
+  updateHeaderStatus();
+}
+function logoutApp(){
+  sessionStorage.removeItem("onto_sdk_role");
+  location.reload();
 }
 function unlockApp(role = "viewer"){
   currentRole = role;
@@ -455,6 +511,10 @@ let dbHandle = null;
 let dbFileName = "";
 let dbBackend = "memory";
 let supabaseClient = null;
+let remoteUpdatedAt = "";
+let dirtyDays = new Set();
+let deletedDays = new Set();
+let replaceAllPending = false;
 
 function emptyDb(){
   return {
@@ -464,18 +524,73 @@ function emptyDb(){
     days: {}
   };
 }
+function cloneValue(value){
+  return typeof structuredClone === "function"
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
+}
+function clearPendingChanges(){
+  dirtyDays.clear();
+  deletedDays.clear();
+  replaceAllPending = false;
+}
+function hasPendingChanges(){
+  return replaceAllPending || dirtyDays.size > 0 || deletedDays.size > 0;
+}
+function markDayDirty(dt){
+  if(!dt) return;
+  dirtyDays.add(dt);
+  deletedDays.delete(dt);
+}
+function markDayDeleted(dt){
+  if(!dt) return;
+  deletedDays.add(dt);
+  dirtyDays.delete(dt);
+}
+function markFullReplacement(){
+  replaceAllPending = true;
+  dirtyDays.clear();
+  deletedDays.clear();
+}
+function removeLegacyCorruptRows(database){
+  Object.values((database && database.days) || {}).forEach(day => {
+    if(!day || typeof day !== "object") return;
+    day.rows ||= {};
+    Object.keys(day.rows).forEach(channel => {
+      if(!/^\?+\((SDK|WEB)\)$/.test(channel)) return;
+      const legacy = day.rows[channel] || {};
+      if(channel.endsWith("(SDK)")){
+        const target = day.rows["하나페이(SDK)"] ||= {};
+        Object.entries(legacy).forEach(([field, value]) => {
+          const questionMarks = typeof value === "string" && /^\?+$/.test(value.trim());
+          if(isBlank(target[field]) && !isBlank(value) && !questionMarks) target[field] = value;
+        });
+      }
+      delete day.rows[channel];
+    });
+  });
+}
 function normalizeDb(obj){
   if(!obj || typeof obj !== "object") return emptyDb();
-  if(obj.schema === "metrics_report_db") {
-    obj.days ||= {};
-    obj.version ||= DB_VERSION;
-    return obj;
+  let normalized = obj;
+  if(!obj.days){
+    // 과거 버전 호환: 날짜 객체만 들어있는 경우
+    normalized = {schema:"metrics_report_db", version:DB_VERSION, updated_at:new Date().toISOString(), days:obj};
   }
-  // 과거 버전 호환: 날짜 객체만 들어있는 경우
-  if(!obj.days) {
-    return {schema:"metrics_report_db", version:DB_VERSION, updated_at:new Date().toISOString(), days:obj};
-  }
-  return obj;
+  normalized.schema ||= "metrics_report_db";
+  normalized.version ||= DB_VERSION;
+  normalized.days ||= {};
+  Object.entries(normalized.days).forEach(([dt, day]) => {
+    if(!day || typeof day !== "object"){
+      normalized.days[dt] = {dt, basis:"landing", memo:"", rows:{}, dfinery:{}};
+      return;
+    }
+    day.dt ||= dt;
+    day.rows ||= {};
+    day.dfinery ||= {};
+  });
+  removeLegacyCorruptRows(normalized);
+  return normalized;
 }
 function setDbStatus(connected, msg){
   const badge = document.getElementById("dbBadge");
@@ -488,11 +603,22 @@ function setDbStatus(connected, msg){
   if(mini){
     mini.className = connected ? "badge ok" : "badge danger";
     mini.textContent = connected ? "DB 연결됨" : "DB 미연결";
-    mini.onclick = openDbFile;
-    mini.title = connected ? "DB 파일 다시 열기" : "DB 파일 열기";
-    mini.style.cursor = "pointer";
+    if(connected && dbBackend === "supabase"){
+      mini.onclick = () => loadSupabaseDb(true);
+      mini.title = "Supabase 데이터 새로고침";
+      mini.style.cursor = "pointer";
+    }else if(canEdit()){
+      mini.onclick = openDbFile;
+      mini.title = connected ? "DB 파일 다시 열기" : "DB 파일 열기";
+      mini.style.cursor = "pointer";
+    }else{
+      mini.onclick = null;
+      mini.title = connected ? "데이터 연결됨" : "데이터 연결 대기 중";
+      mini.style.cursor = "default";
+    }
   }
   if(name) name.textContent = msg || (connected ? dbFileName : "브라우저 메모리만 사용 중");
+  updateHeaderStatus();
 }
 function isSupabaseConfigured(){
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
@@ -510,6 +636,10 @@ async function loadSupabaseDb(showAlert = true){
     if(showAlert) alert("Supabase 설정 또는 클라이언트 로드가 필요합니다.");
     return false;
   }
+  if(showAlert && hasPendingChanges() && !confirm("저장되지 않은 화면 변경이 있습니다. 최신 DB를 다시 불러올까요?")){
+    return false;
+  }
+  setActionStatus("최신 데이터를 불러오는 중입니다.");
   try{
     const { data, error } = await client
       .from(SUPABASE_TABLE)
@@ -519,9 +649,103 @@ async function loadSupabaseDb(showAlert = true){
     if(error) throw error;
     if(!data || !data.data){
       db = emptyDb();
-      await saveSupabaseDb(false);
     }else{
       db = normalizeDb(data.data);
+    }
+    dbHandle = null;
+    dbFileName = `Supabase:${SUPABASE_TABLE}/${SUPABASE_DB_ID}`;
+    dbBackend = "supabase";
+    remoteUpdatedAt = data ? data.updated_at || "" : "";
+    clearPendingChanges();
+    selectLatestDateIfMissing();
+    setDbStatus(true, dbFileName);
+    syncSelectedDayForm();
+    renderAll();
+    setActionStatus("최신 데이터를 불러왔습니다.", "ok");
+    if(showAlert) alert("Supabase DB를 불러왔습니다.");
+    return true;
+  }catch(e){
+    setDbStatus(false, "Supabase 연결 실패");
+    setActionStatus("데이터를 불러오지 못했습니다.", "error");
+    if(showAlert) alert("Supabase DB 불러오기 실패: " + (e.message || JSON.stringify(e)));
+    return false;
+  }
+}
+function mergePendingIntoRemote(remoteDb, dirtySnapshot, deletedSnapshot, forceReplace){
+  if(forceReplace) return normalizeDb(cloneValue(db));
+  const merged = normalizeDb(cloneValue(remoteDb || emptyDb()));
+  dirtySnapshot.forEach(dt => {
+    if(db.days && db.days[dt]) merged.days[dt] = cloneValue(db.days[dt]);
+  });
+  deletedSnapshot.forEach(dt => delete merged.days[dt]);
+  return merged;
+}
+async function saveSupabaseDb(showAlert = true, options = {}){
+  if(!requireEditor("Supabase 저장")) return false;
+  const client = getSupabaseClient();
+  if(!client){
+    if(showAlert) alert("Supabase 설정 또는 클라이언트 로드가 필요합니다.");
+    return false;
+  }
+  const forceReplace = options.forceReplace === true || replaceAllPending;
+  if(!forceReplace && !hasPendingChanges()){
+    setActionStatus("저장할 변경사항이 없습니다.");
+    if(showAlert) alert("저장할 변경사항이 없습니다.");
+    return true;
+  }
+  const dirtySnapshot = new Set(dirtyDays);
+  const deletedSnapshot = new Set(deletedDays);
+  setActionStatus("Supabase에 저장하는 중입니다.");
+  try{
+    let savedAt = "";
+    let savedDb = null;
+    for(let attempt = 0; attempt < 3; attempt += 1){
+      const { data: remote, error: readError } = await client
+        .from(SUPABASE_TABLE)
+        .select("data,updated_at")
+        .eq("id", SUPABASE_DB_ID)
+        .maybeSingle();
+      if(readError) throw readError;
+
+      const candidate = mergePendingIntoRemote(remote && remote.data, dirtySnapshot, deletedSnapshot, forceReplace);
+      const timestamp = new Date().toISOString();
+      candidate.updated_at = timestamp;
+
+      if(remote){
+        const { data: updated, error: updateError } = await client
+          .from(SUPABASE_TABLE)
+          .update({data:candidate, updated_at:timestamp})
+          .eq("id", SUPABASE_DB_ID)
+          .eq("updated_at", remote.updated_at)
+          .select("updated_at")
+          .maybeSingle();
+        if(updateError) throw updateError;
+        if(!updated) continue;
+        savedAt = updated.updated_at || timestamp;
+      }else{
+        const { data: inserted, error: insertError } = await client
+          .from(SUPABASE_TABLE)
+          .insert({id:SUPABASE_DB_ID, data:candidate, updated_at:timestamp})
+          .select("updated_at")
+          .single();
+        if(insertError){
+          if(insertError.code === "23505") continue;
+          throw insertError;
+        }
+        savedAt = inserted.updated_at || timestamp;
+      }
+      savedDb = candidate;
+      break;
+    }
+    if(!savedDb) throw new Error("다른 화면에서 DB가 계속 변경되어 저장하지 못했습니다. 다시 시도해 주세요.");
+
+    db = normalizeDb(savedDb);
+    remoteUpdatedAt = savedAt;
+    if(forceReplace){
+      clearPendingChanges();
+    }else{
+      dirtySnapshot.forEach(dt => dirtyDays.delete(dt));
+      deletedSnapshot.forEach(dt => deletedDays.delete(dt));
     }
     dbHandle = null;
     dbFileName = `Supabase:${SUPABASE_TABLE}/${SUPABASE_DB_ID}`;
@@ -529,45 +753,18 @@ async function loadSupabaseDb(showAlert = true){
     setDbStatus(true, dbFileName);
     syncSelectedDayForm();
     renderAll();
-    if(showAlert) alert("Supabase DB를 불러왔습니다.");
-    return true;
-  }catch(e){
-    setDbStatus(false, "Supabase 연결 실패");
-    if(showAlert) alert("Supabase DB 불러오기 실패: " + (e.message || JSON.stringify(e)));
-    return false;
-  }
-}
-async function saveSupabaseDb(showAlert = true){
-  if(!requireEditor("Supabase 저장")) return false;
-  const client = getSupabaseClient();
-  if(!client){
-    if(showAlert) alert("Supabase 설정 또는 클라이언트 로드가 필요합니다.");
-    return false;
-  }
-  try{
-    db.updated_at = new Date().toISOString();
-    const { error } = await client
-      .from(SUPABASE_TABLE)
-      .upsert({
-        id: SUPABASE_DB_ID,
-        data: db,
-        updated_at: new Date().toISOString()
-      }, { onConflict: "id" });
-    if(error) throw error;
-    dbHandle = null;
-    dbFileName = `Supabase:${SUPABASE_TABLE}/${SUPABASE_DB_ID}`;
-    dbBackend = "supabase";
-    setDbStatus(true, dbFileName);
+    setActionStatus("Supabase 저장이 완료됐습니다.", "ok");
     if(showAlert) alert("Supabase DB에 저장했습니다.");
     return true;
   }catch(e){
+    setActionStatus("Supabase 저장에 실패했습니다.", "error");
     alert("Supabase DB 저장 실패: " + (e.message || JSON.stringify(e)));
     return false;
   }
 }
 async function uploadCurrentDbToSupabase(){
   if(!requireEditor("Supabase 업로드")) return;
-  const ok = await saveSupabaseDb(false);
+  const ok = await saveSupabaseDb(false, {forceReplace:true});
   if(ok) alert("현재 화면의 DB를 Supabase로 업로드했습니다.");
 }
 async function initSupabaseAutoLoad(){
@@ -576,6 +773,12 @@ async function initSupabaseAutoLoad(){
     return;
   }
   await loadSupabaseDb(false);
+}
+function selectLatestDateIfMissing(){
+  const input = document.getElementById("dt");
+  if(!input || (db.days && db.days[input.value])) return;
+  const latest = Object.keys((db && db.days) || {}).sort((a,b)=>b.localeCompare(a))[0];
+  if(latest) input.value = latest;
 }
 function syncSelectedDayForm(){
   const dt = document.getElementById("dt").value;
@@ -608,6 +811,9 @@ async function openDbFile(){
     dbHandle = handle;
     dbFileName = file.name;
     dbBackend = "file";
+    remoteUpdatedAt = "";
+    clearPendingChanges();
+    selectLatestDateIfMissing();
     setDbStatus(true, file.name);
     syncSelectedDayForm();
     renderAll();
@@ -625,6 +831,9 @@ async function openDbFileFallback(event){
     dbHandle = null;
     dbFileName = file.name;
     dbBackend = "memory";
+    remoteUpdatedAt = "";
+    clearPendingChanges();
+    selectLatestDateIfMissing();
     setDbStatus(false, `${file.name} 불러옴 · 직접 저장 연결은 아님`);
     syncSelectedDayForm();
     renderAll();
@@ -647,6 +856,7 @@ async function saveDbFile(){
       const writable = await dbHandle.createWritable();
       await writable.write(JSON.stringify(db, null, 2));
       await writable.close();
+      clearPendingChanges();
       setDbStatus(true, dbFileName || "연결된 DB 파일");
       return;
     }catch(e){
@@ -693,6 +903,9 @@ async function importDbFileFallback(event){
     dbHandle = null;
     dbFileName = file.name;
     dbBackend = "memory";
+    remoteUpdatedAt = "";
+    clearPendingChanges();
+    selectLatestDateIfMissing();
     setDbStatus(false, `${file.name} 가져옴 · 직접 저장 연결은 아님`);
     syncSelectedDayForm();
     renderAll();
@@ -796,6 +1009,11 @@ function display(x, naText=""){
   const n = Number(String(x).replace(/,/g,""));
   if(Number.isFinite(n)) return Math.round(n).toLocaleString("ko-KR");
   return String(x).replaceAll("SDK", "APP").replaceAll("온투", "서비스");
+}
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", "\"":"&quot;", "'":"&#39;"
+  })[char]);
 }
 function pct(a,b){
   a = num(a); b = num(b);
@@ -943,7 +1161,7 @@ function makeDayFromForm(){
 async function saveDay(){
   if(!requireEditor("보고 행 저장")) return;
   const dt = document.getElementById("dt").value || kstToday();
-  const existing = db.days && db.days[dt] ? structuredClone(db.days[dt]) : null;
+  const existing = db.days && db.days[dt] ? cloneValue(db.days[dt]) : null;
   const day = makeDayFromForm();
   if(existing){
     day.rows = Object.assign({}, existing.rows || {}, day.rows || {});
@@ -954,10 +1172,16 @@ async function saveDay(){
   }
   db.days[day.dt] = day;
   db.updated_at = new Date().toISOString();
+  markDayDirty(day.dt);
   loadDayToForm(false);
   renderAll();
-  if(dbBackend === "supabase") await saveSupabaseDb(false);
-  if(dbHandle) await saveDbFile();
+  if(dbBackend === "supabase"){
+    await saveSupabaseDb(false);
+  }else if(dbHandle){
+    await saveDbFile();
+  }else{
+    setActionStatus(`${day.dt} 데이터가 화면에 반영됐습니다.`, "ok");
+  }
 }
 
 function dayRows(day){
@@ -1045,7 +1269,7 @@ function renderReport(rows){
   const colWidths = ["9%","16%","8%","8%","8%","7%","7%","7%","6%","24%"];
   document.getElementById("reportTable").innerHTML =
     `<colgroup>${colWidths.map(w=>`<col style="width:${w}">`).join("")}</colgroup>` +
-    `<thead><tr>${headers.map(h=>`<th>${h}</th>`).join("")}</tr></thead>` +
+    `<thead><tr>${headers.map(h=>`<th>${escapeHtml(h)}</th>`).join("")}</tr></thead>` +
     `<tbody>${rows.map(r=>{
       let cls = "";
       if(r.date === "일 합계") cls = "sum";
@@ -1054,26 +1278,42 @@ function renderReport(rows){
       return `<tr class="${cls}">${fields.map(f=>{
         const v = r[f];
         const na = (v === "N/A" || v === "추적불가") ? "na" : "";
-        return `<td class="${na}">${display(v)}</td>`;
+        return `<td class="${na}">${escapeHtml(display(v))}</td>`;
       }).join("")}</tr>`;
     }).join("")}</tbody>`;
 }
 
 function renderKpis(day){
-  const rows = day ? dayRows(day).filter(r=>r.date==="일 합계") : [];
-  const s = rows[0] || {};
+  const rows = day ? dayRows(day) : [];
+  const detail = rows.filter(r=>r.date !== "일 합계");
+  const s = rows.find(r=>r.date === "일 합계") || {};
+  const sumFor = (predicate, field) => detail
+    .filter(predicate)
+    .reduce((total, row) => total + num(row[field]), 0);
+  const isWeb = row => String(row.channel).includes("(WEB)");
+  const isApp = row => String(row.channel).includes("(SDK)");
+  const webClick = sumFor(isWeb, "banner_click");
+  const webLanding = sumFor(isWeb, "banner_landing");
+  const webDeep = sumFor(isWeb, "deeplink_click");
+  const webInstall = sumFor(isWeb, "app_install");
+  const webOpen = sumFor(isWeb, "sdk_open");
+  const webSignup = sumFor(isWeb, "signup");
+  const appClick = sumFor(isApp, "banner_click");
+  const appOpen = sumFor(isApp, "sdk_open");
+  const appSignup = sumFor(isApp, "signup");
+  const appInvest = sumFor(isApp, "invest");
   const items = [
-    ["배너클릭", s.banner_click, ""],
-    ["배너랜딩", s.banner_landing, pct(s.banner_landing, s.banner_click)+" / 클릭"],
-    ["딥링크", s.deeplink_click, pct(s.deeplink_click, s.banner_landing)+" / 랜딩"],
-    ["앱설치", s.app_install, pct(s.app_install, s.deeplink_click)+" / 딥링크"],
-    ["앱실행", s.sdk_open, pct(s.sdk_open, s.app_install)+" / 설치"],
-    ["신규회원", s.signup, pct(s.signup, s.sdk_open)+" / 실행"],
-    ["투자", s.invest, pct(s.invest, s.signup)+" / 회원"],
+    ["배너클릭", s.banner_click, `WEB ${display(webClick)} · APP ${display(appClick)}`],
+    ["배너랜딩", s.banner_landing, pct(webLanding, webClick)+" / WEB 클릭"],
+    ["딥링크", s.deeplink_click, pct(webDeep, webLanding)+" / WEB 랜딩"],
+    ["앱설치", s.app_install, pct(webInstall, webDeep)+" / 딥링크"],
+    ["앱실행", s.sdk_open, `WEB ${display(webOpen)} · APP ${display(appOpen)}`],
+    ["신규회원", s.signup, `WEB ${display(webSignup)} · APP ${display(appSignup)}`],
+    ["투자", s.invest, pct(appInvest, appSignup)+" / APP 회원"],
     ["클릭→회원", s.signup, pct(s.signup, s.banner_click)]
   ];
   document.getElementById("kpis").innerHTML = items.map(([n,v,sub])=>`
-    <div class="kpi"><div class="name">${n}</div><div class="value">${display(v||0)}</div><div class="sub">${sub||"&nbsp;"}</div></div>
+    <div class="kpi"><div class="name">${escapeHtml(n)}</div><div class="value">${escapeHtml(display(v||0))}</div><div class="sub">${escapeHtml(sub||"")}</div></div>
   `).join("");
 }
 
@@ -1104,14 +1344,22 @@ async function deleteDay(){
   if(!confirm(`${dt} 데이터를 삭제할까요?`)) return;
   delete db.days[dt];
   db.updated_at = new Date().toISOString();
+  markDayDeleted(dt);
   renderAll();
   if(dbBackend === "supabase") await saveSupabaseDb(false);
   if(dbHandle) await saveDbFile();
 }
 
 function clearForm(){
-  document.querySelectorAll("input").forEach(el=>{
-    if(!["dt","dbImportFile"].includes(el.id)) el.value = "";
+  [
+    "oneq_click","oneq_landing","oneq_open","oneq_signup","oneq_memo",
+    "money_click","money_landing","money_open","money_signup","money_memo",
+    "payweb_click","payweb_landing","payweb_open","payweb_signup","payweb_memo",
+    "paysdk_click","paysdk_open","paysdk_signup","paysdk_invest","paysdk_memo",
+    "df_deeplink","df_install","df_open","df_signup","memo"
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = "";
   });
   ["oneq","money","payweb"].forEach(prefix => {
     const mode = document.getElementById(prefix + "_landing_mode");
@@ -1119,7 +1367,6 @@ function clearForm(){
     if(mode) mode.value = "same";
     if(landing) landing.disabled = true;
   });
-  document.getElementById("memo").value = "";
   updatePayWebVisibility();
 }
 
@@ -1176,6 +1423,9 @@ function importBackup(){
   try{
     const obj = JSON.parse(document.getElementById("backupText").value);
     db = normalizeDb(obj);
+    markFullReplacement();
+    selectLatestDateIfMissing();
+    syncSelectedDayForm();
     renderAll();
     alert("복원했습니다. 파일로 남기려면 DB 저장을 누르세요.");
   }catch(e){
@@ -1269,6 +1519,7 @@ async function mergeZeppelinObject(obj, showAlert = true){
       updated += 1;
     }
     day.updated_at = new Date().toISOString();
+    markDayDirty(dt);
     touched.add(dt);
   });
   if(!touched.size){
@@ -1278,9 +1529,17 @@ async function mergeZeppelinObject(obj, showAlert = true){
   db.updated_at = new Date().toISOString();
   syncSelectedDayForm();
   renderAll();
-  if(dbBackend === "supabase") await saveSupabaseDb(false);
-  if(dbHandle) await saveDbFile();
-  const resultText = `${touched.size}개 날짜, ${updated}개 값을 반영했습니다.`;
+  let persisted = null;
+  if(dbBackend === "supabase") persisted = await saveSupabaseDb(false);
+  if(dbHandle){
+    await saveDbFile();
+    persisted = true;
+  }
+  const resultText = persisted === true
+    ? `${touched.size}개 날짜, ${updated}개 값을 반영하고 저장했습니다.`
+    : persisted === false
+      ? `${touched.size}개 날짜, ${updated}개 값을 화면에 반영했지만 원격 저장은 실패했습니다.`
+      : `${touched.size}개 날짜, ${updated}개 값을 화면에 반영했습니다. DB 저장이 필요합니다.`;
   const resultEl = document.getElementById("zeppelinResult");
   if(resultEl) resultEl.textContent = resultText;
   if(showAlert) alert(resultText);
@@ -1295,7 +1554,10 @@ function mergeMigrationObject(obj){
   const count = Object.keys(incoming.days || {}).length;
   if(!count){ alert("가져올 날짜 데이터가 없습니다."); return; }
   db.days ||= {};
-  Object.entries(incoming.days).forEach(([dt, day]) => db.days[dt] = day);
+  Object.entries(incoming.days).forEach(([dt, day]) => {
+    db.days[dt] = day;
+    markDayDirty(dt);
+  });
   db.updated_at = new Date().toISOString();
   syncSelectedDayForm();
   renderAll();
@@ -1323,6 +1585,8 @@ async function clearAll(){
   if(!requireEditor("전체 초기화")) return;
   if(!confirm("전체 DB 데이터를 삭제할까요?")) return;
   db = emptyDb();
+  markFullReplacement();
+  syncSelectedDayForm();
   renderAll();
   if(dbBackend === "supabase") await saveSupabaseDb(false);
   if(dbHandle) await saveDbFile();
